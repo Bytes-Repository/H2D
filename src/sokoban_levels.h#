@@ -1,0 +1,62 @@
+pub fn level_count() -> int is
+    return 3
+end
+
+pub fn level_name(n: int) -> string is
+    if n == 0 is return "Poziom 1 — Rozgrzewka" end
+    if n == 1 is return "Poziom 2 — Ciasny kat" end
+    if n == 2 is return "Poziom 3 — Trzy skrzynie" end
+    return "???"
+end
+
+pub fn level_rows(n: int) -> [string] is
+    if n == 0 is return level0() end
+    if n == 1 is return level1() end
+    if n == 2 is return level2() end
+    return level0()
+end
+
+fn level0() -> [string] is
+    let mut rows: [string] = []
+    rows.push("########")
+    rows.push("#      #")
+    rows.push("#  $   #")
+    rows.push("#  .   #")
+    rows.push("#  @   #")
+    rows.push("#      #")
+    rows.push("########")
+    return rows
+end
+
+fn level1() -> [string] is
+    let mut rows: [string] = []
+    rows.push("##########")
+    rows.push("#        #")
+    rows.push("#  ####  #")
+    rows.push("#  #  #  #")
+    rows.push("#  #$ #  #")
+    rows.push("#  #. #  #")
+    rows.push("#  #  #  #")
+    rows.push("#  ####  #")
+    rows.push("#   @    #")
+    rows.push("##########")
+    return rows
+end
+
+;; Three independent box/goal pairs on an open floor — every push is
+;; reachable from either side regardless of order, so this is solvable
+;; no matter which box the player tackles first.
+fn level2() -> [string] is
+    let mut rows: [string] = []
+    rows.push("##############")
+    rows.push("#            #")
+    rows.push("#  $.        #")
+    rows.push("#            #")
+    rows.push("#      $.    #")
+    rows.push("#            #")
+    rows.push("#          $.#")
+    rows.push("#            #")
+    rows.push("#     @      #")
+    rows.push("##############")
+    return rows
+end

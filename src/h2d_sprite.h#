@@ -1,0 +1,47 @@
+pub struct Sprite is
+    pub width:  int
+    pub height: int
+    pub rows:   [string]
+    pub transparent_char: string
+end
+
+;; `lines` must all be the same length — call `pad_rows` first if not.
+pub fn sprite_from_lines(lines: [string], transparent_char: string) -> Sprite is
+    let h: int = lines.len()
+    let w: int = 0
+    if h > 0 is
+        let w2: int = lines[0].len()
+        return Sprite { width: w2, height: h, rows: lines, transparent_char: transparent_char }
+    end
+    return Sprite { width: w, height: h, rows: lines, transparent_char: transparent_char }
+end
+
+;; Right-pads every row with `transparent_char` up to the widest row, so
+;; ragged multi-line literals (easy to typo by a trailing space) still
+;; produce a valid rectangular sprite instead of corrupting blit_sprite's
+;; column math.
+pub fn pad_rows(lines: [string], transparent_char: string) -> [string] is
+    let mut max_w: int = 0
+    let mut i: int = 0
+    while i < lines.len() is
+        if lines[i].len() > max_w is max_w = lines[i].len() end
+        i += 1
+    end
+    let mut out: [string] = []
+    i = 0
+    while i < lines.len() is
+        let mut row: string = lines[i]
+        while row.len() < max_w is row = row + transparent_char end
+        out.push(row)
+        i += 1
+    end
+    return out
+end
+
+;; A single glyph "sprite" — handy for entities that are just one
+;; character (`@`, `#`, an item glyph, ...).
+pub fn sprite_glyph(ch: string) -> Sprite is
+    let mut rows: [string] = []
+    rows.push(ch)
+    return Sprite { width: 1, height: 1, rows: rows, transparent_char: "\x00" }
+end

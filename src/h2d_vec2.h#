@@ -1,0 +1,59 @@
+use "std -> math" from "m"
+
+pub struct Vec2 is
+    pub x: f64
+    pub y: f64
+end
+
+impl Vec2 is
+    fn add(self, other: Vec2) -> Vec2 is
+        return Vec2 { x: self.x + other.x, y: self.y + other.y }
+    end
+
+    fn sub(self, other: Vec2) -> Vec2 is
+        return Vec2 { x: self.x - other.x, y: self.y - other.y }
+    end
+
+    fn scale(self, k: f64) -> Vec2 is
+        return Vec2 { x: self.x * k, y: self.y * k }
+    end
+
+    fn dot(self, other: Vec2) -> f64 is
+        return self.x * other.x + self.y * other.y
+    end
+
+    fn length(self) -> f64 is
+        return m::sqrt(self.x * self.x + self.y * self.y)
+    end
+
+    ;; Grid-cell distance ignoring diagonals (Manhattan) — the metric
+    ;; that actually matters for a character-grid game more often than
+    ;; Euclidean length does.
+    fn manhattan(self, other: Vec2) -> f64 is
+        let dx: f64 = self.x - other.x
+        let dy: f64 = self.y - other.y
+        return f64_abs(dx) + f64_abs(dy)
+    end
+
+    fn normalized(self) -> Vec2 is
+        let len: f64 = self.length()
+        if len == 0.0 is return Vec2 { x: 0.0, y: 0.0 } end
+        return Vec2 { x: self.x / len, y: self.y / len }
+    end
+
+    fn to_int_x(self) -> int is return __builtin_conv_float_to_int(self.x) end
+    fn to_int_y(self) -> int is return __builtin_conv_float_to_int(self.y) end
+end
+
+fn f64_abs(v: f64) -> f64 is
+    if v < 0.0 is return 0.0 - v end
+    return v
+end
+
+pub fn vec2(x: f64, y: f64) -> Vec2 is
+    return Vec2 { x: x, y: y }
+end
+
+pub fn vec2_zero() -> Vec2 is
+    return Vec2 { x: 0.0, y: 0.0 }
+end

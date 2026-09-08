@@ -1,0 +1,65 @@
+mod h2d_canvas
+
+pub struct Menu is
+    pub items:    [string]
+    pub selected: int
+end
+
+pub fn new_menu(items: [string]) -> Menu is
+    return Menu { items: items, selected: 0 }
+end
+
+pub fn move_up(mut menu: Menu) -> Menu is
+    menu.selected -= 1
+    if menu.selected < 0 is menu.selected = menu.items.len() - 1 end
+    return menu
+end
+
+pub fn move_down(mut menu: Menu) -> Menu is
+    menu.selected += 1
+    if menu.selected >= menu.items.len() is menu.selected = 0 end
+    return menu
+end
+
+;; Feed a normalized h2d_input action in. Returns (updated Menu,
+;; confirmed) — `confirmed` is true exactly when the player pressed
+;; Enter with no direction (h2d_input normalizes a bare Enter to
+;; "wait"), i.e. they accepted the highlighted item.
+pub fn handle_action(mut menu: Menu, action: string) -> (Menu, bool) is
+    if action == "up" is
+        menu = move_up(menu)
+        return (menu, false)
+    end
+    if action == "down" is
+        menu = move_down(menu)
+        return (menu, false)
+    end
+    if action == "wait" is
+        return (menu, true)
+    end
+    return (menu, false)
+end
+
+pub fn selected_index(menu: Menu) -> int is
+    return menu.selected
+end
+
+pub fn selected_label(menu: Menu) -> string is
+    return menu.items[menu.selected]
+end
+
+;; Draws one item per row starting at (x, y). The selected item gets
+;; `selected_style` and a "> " marker; everything else gets
+;; `normal_style` and two spaces of indent, so the text column still
+;; lines up.
+pub fn draw(mut canvas: h2d_canvas::Canvas, menu: Menu, x: int, y: int, normal_style: string, selected_style: string) -> h2d_canvas::Canvas is
+    let mut i: int = 0
+    while i < menu.items.len() is
+        let is_selected: bool = i == menu.selected
+        let prefix: string = if is_selected then "> " else "  "
+        let style: string = if is_selected then selected_style else normal_style
+        canvas = h2d_canvas::draw_text(canvas, x, y + i, prefix + menu.items[i], style)
+        i += 1
+    end
+    return canvas
+end

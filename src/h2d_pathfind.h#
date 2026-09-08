@@ -1,0 +1,101 @@
+mod h2d_tilemap
+mod h2d_collision
+use "std -> collections" from "col"
+
+;; Returns (found, path_xs, path_ys). If found, the path runs from
+;; (start_x, start_y) to (goal_x, goal_y) inclusive, in order — so
+;; path_xs.len() - 1 is the number of moves required. If not found,
+;; both arrays are empty.
+pub fn bfs_path(map: h2d_tilemap::Tilemap, start_x: int, start_y: int, goal_x: int, goal_y: int, solid_chars: string) -> (bool, [int], [int]) is
+    let mut empty_x: [int] = []
+    let mut empty_y: [int] = []
+
+    if h2d_tilemap::is_solid(map, goal_x, goal_y, solid_chars) is
+        return (false, empty_x, empty_y)
+    end
+
+    if start_x == goal_x && start_y == goal_y is
+        let mut xs: [int] = []
+        let mut ys: [int] = []
+        xs.push(start_x)
+        ys.push(start_y)
+        return (true, xs, ys)
+    end
+
+    let visited: any = col::hashmap_new()
+    let parent: any = col::hashmap_new()
+    let mut frontier: any = queue_new()
+
+    col::hashmap_insert(visited, key_of(start_x, start_y), "1")
+    frontier.push((start_x, start_y))
+
+    let mut found: bool = false
+
+    while !frontier.is_empty() && !found is
+        let cur = frontier.pop()
+        let cx: int = cur.0
+        let cy: int = cur.1
+
+        let nbr_xs: [int] = h2d_collision::neighbors_x(cx)
+        let nbr_ys: [int] = h2d_collision::neighbors_y(cy)
+        let mut i: int = 0
+        while i < 4 && !found is
+            let nx: int = nbr_xs[i]
+            let ny: int = nbr_ys[i]
+            let k: string = key_of(nx, ny)
+            if !h2d_tilemap::is_solid(map, nx, ny, solid_chars) && !col::hashmap_contains(visited, k) is
+                col::hashmap_insert(visited, k, "1")
+                col::hashmap_insert(parent, k, key_of(cx, cy))
+                frontier.push((nx, ny))
+                if nx == goal_x && ny == goal_y is found = true end
+            end
+            i += 1
+        end
+    end
+
+    if !found is return (false, empty_x, empty_y) end
+
+    ;; Walk parent pointers back from the goal to the start, then reverse.
+    let mut rx: [int] = []
+    let mut ry: [int] = []
+    let mut cx: int = goal_x
+    let mut cy: int = goal_y
+    rx.push(cx)
+    ry.push(cy)
+    while !(cx == start_x && cy == start_y) is
+        let pk: string = col::hashmap_get(parent, key_of(cx, cy))
+        let coords = decode_key(pk)
+        cx = coords.0
+        cy = coords.1
+        rx.push(cx)
+        ry.push(cy)
+    end
+
+    return (true, reverse_ints(rx), reverse_ints(ry))
+end
+
+;; True if a path of any length exists — cheaper to read than checking
+;; `bfs_path(...).0` when you don't need the path itself.
+pub fn reachable(map: h2d_tilemap::Tilemap, start_x: int, start_y: int, goal_x: int, goal_y: int, solid_chars: string) -> bool is
+    let result = bfs_path(map, start_x, start_y, goal_x, goal_y, solid_chars)
+    return result.0
+end
+
+fn key_of(x: int, y: int) -> string is
+    return to_string(x) + "," + to_string(y)
+end
+
+fn decode_key(k: string) -> (int, int) is
+    let parts: [string] = string_split(k, ",")
+    return (str_to_int(parts[0]), str_to_int(parts[1]))
+end
+
+fn reverse_ints(arr: [int]) -> [int] is
+    let mut out: [int] = []
+    let mut i: int = arr.len() - 1
+    while i >= 0 is
+        out.push(arr[i])
+        i -= 1
+    end
+    return out
+end

@@ -1,0 +1,45 @@
+pub fn point_in_rect(px: int, py: int, rx: int, ry: int, rw: int, rh: int) -> bool is
+    return px >= rx && py >= ry && px < rx + rw && py < ry + rh
+end
+
+pub fn rects_intersect(ax: int, ay: int, aw: int, ah: int, bx: int, by: int, bw: int, bh: int) -> bool is
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
+end
+
+pub fn same_cell(ax: int, ay: int, bx: int, by: int) -> bool is
+    return ax == bx && ay == by
+end
+
+;; The four orthogonal neighbours of (x, y) as parallel arrays (H# has
+;; no array-of-tuples ergonomics worth relying on yet) — index 0..3
+;; corresponds to up/down/left/right, matching input::action_delta's
+;; ordering conceptually (not literally, since that one returns deltas
+;; not coordinates).
+pub fn neighbors_x(x: int) -> [int] is
+    let mut out: [int] = []
+    out.push(x)
+    out.push(x)
+    out.push(x - 1)
+    out.push(x + 1)
+    return out
+end
+
+pub fn neighbors_y(y: int) -> [int] is
+    let mut out: [int] = []
+    out.push(y - 1)
+    out.push(y + 1)
+    out.push(y)
+    out.push(y)
+    return out
+end
+
+pub fn manhattan_dist(ax: int, ay: int, bx: int, by: int) -> int is
+    let dx: int = ax - bx
+    let dy: int = ay - by
+    return abs_int(dx) + abs_int(dy)
+end
+
+fn abs_int(v: int) -> int is
+    if v < 0 is return -v end
+    return v
+end

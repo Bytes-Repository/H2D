@@ -1,0 +1,41 @@
+pub struct AudioState is
+    pub debug: bool
+end
+
+pub fn new_audio(debug: bool) -> AudioState is
+    return AudioState { debug: debug }
+end
+
+;; `name` is any identifier you choose ("coin", "hit", "music/theme",
+;; a file path — it's meaningless today, purely for your own logging
+;; and for a future real backend to key off of).
+pub fn play(state: AudioState, name: string) is
+    if state.debug is
+        write("[h2d_audio] play: " + name)
+    end
+end
+
+pub fn play_loop(state: AudioState, name: string) is
+    if state.debug is
+        write("[h2d_audio] play_loop: " + name)
+    end
+end
+
+pub fn stop(state: AudioState, name: string) is
+    if state.debug is
+        write("[h2d_audio] stop: " + name)
+    end
+end
+
+pub fn stop_all(state: AudioState) is
+    if state.debug is
+        write("[h2d_audio] stop_all")
+    end
+end
+
+;; volume in [0.0, 1.0].
+pub fn set_volume(state: AudioState, name: string, volume: f64) is
+    if state.debug is
+        write("[h2d_audio] set_volume: " + name + " -> " + to_string(volume))
+    end
+end

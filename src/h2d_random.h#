@@ -1,0 +1,67 @@
+use "std -> crypto" from "crypto"
+
+;; Inclusive on both ends: range(1, 6) can return 1 or 6.
+pub fn range(min: int, max: int) -> int is
+    return crypto::random_int(min, max)
+end
+
+;; True `percent` percent of the time (0-100).
+pub fn chance(percent: int) -> bool is
+    return range(1, 100) <= percent
+end
+
+pub fn coin_flip() -> bool is
+    return range(0, 1) == 1
+end
+
+;; dice(6) == a d6 roll, 1..=6.
+pub fn dice(sides: int) -> int is
+    return range(1, sides)
+end
+
+;; Sum of `count` rolls of a `sides`-sided die, e.g. roll_dice(2, 6) for 2d6.
+pub fn roll_dice(count: int, sides: int) -> int is
+    let mut total: int = 0
+    let mut i: int = 0
+    while i < count is
+        total += dice(sides)
+        i += 1
+    end
+    return total
+end
+
+;; Uniform random element. Caller must ensure the array isn't empty.
+pub fn choice_int(arr: [int]) -> int is
+    return arr[range(0, arr.len() - 1)]
+end
+
+pub fn choice_string(arr: [string]) -> string is
+    return arr[range(0, arr.len() - 1)]
+end
+
+;; Fisher-Yates shuffle. Returns a new array; does not touch the original.
+pub fn shuffle_ints(arr: [int]) -> [int] is
+    let mut out: [int] = arr
+    let mut i: int = out.len() - 1
+    while i > 0 is
+        let j: int = range(0, i)
+        let tmp: int = out[i]
+        out[i] = out[j]
+        out[j] = tmp
+        i -= 1
+    end
+    return out
+end
+
+pub fn shuffle_strings(arr: [string]) -> [string] is
+    let mut out: [string] = arr
+    let mut i: int = out.len() - 1
+    while i > 0 is
+        let j: int = range(0, i)
+        let tmp: string = out[i]
+        out[i] = out[j]
+        out[j] = tmp
+        i -= 1
+    end
+    return out
+end

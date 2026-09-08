@@ -1,0 +1,50 @@
+pub struct Camera is
+    pub x: int   ;; world-space column of the viewport's top-left cell
+    pub y: int   ;; world-space row of the viewport's top-left cell
+    pub viewport_w: int
+    pub viewport_h: int
+end
+
+pub fn new_camera(viewport_w: int, viewport_h: int) -> Camera is
+    return Camera { x: 0, y: 0, viewport_w: viewport_w, viewport_h: viewport_h }
+end
+
+;; Centers the camera on (target_x, target_y), clamped so the viewport
+;; never scrolls past the map edges. If the map is smaller than the
+;; viewport on some axis, that axis clamps to 0 (map stays pinned to
+;; the top-left rather than jittering).
+pub fn follow(mut cam: Camera, target_x: int, target_y: int, map_w: int, map_h: int) -> Camera is
+    let mut nx: int = target_x - cam.viewport_w / 2
+    let mut ny: int = target_y - cam.viewport_h / 2
+
+    let mut max_x: int = map_w - cam.viewport_w
+    let mut max_y: int = map_h - cam.viewport_h
+    if max_x < 0 is max_x = 0 end
+    if max_y < 0 is max_y = 0 end
+
+    if nx < 0 is nx = 0 end
+    if ny < 0 is ny = 0 end
+    if nx > max_x is nx = max_x end
+    if ny > max_y is ny = max_y end
+
+    cam.x = nx
+    cam.y = ny
+    return cam
+end
+
+pub fn world_to_screen_x(cam: Camera, world_x: int) -> int is
+    return world_x - cam.x
+end
+
+pub fn world_to_screen_y(cam: Camera, world_y: int) -> int is
+    return world_y - cam.y
+end
+
+;; True if the given world cell currently falls inside the viewport —
+;; use this to skip drawing (and to skip AI/physics work, if you want)
+;; for anything off-screen.
+pub fn is_visible(cam: Camera, world_x: int, world_y: int) -> bool is
+    let sx: int = world_to_screen_x(cam, world_x)
+    let sy: int = world_to_screen_y(cam, world_y)
+    return sx >= 0 && sy >= 0 && sx < cam.viewport_w && sy < cam.viewport_h
+end

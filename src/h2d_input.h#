@@ -1,0 +1,59 @@
+pub fn read_action(prompt: string) -> string is
+    io_print(prompt)
+    let raw: string = io_read_line()
+    return normalize(raw)
+end
+
+fn normalize(raw: string) -> string is
+    let s: string = to_lower(trim_str(raw))
+    if s == "w" || s == "up" || s == "k" is return "up" end
+    if s == "s" || s == "down" || s == "j" is return "down" end
+    if s == "a" || s == "left" || s == "h" is return "left" end
+    if s == "d" || s == "right" || s == "l" is return "right" end
+    if s == "" || s == "wait" || s == "." is return "wait" end
+    if s == "q" || s == "quit" || s == "exit" is return "quit" end
+    if s == "r" || s == "restart" is return "restart" end
+    if s == "?" || s == "help" is return "help" end
+    return s
+end
+
+fn trim_str(s: string) -> string is
+    let n: int = s.len()
+    let mut start: int = 0
+    while start < n && is_ws_char(s[start..start + 1]) is start += 1 end
+    let mut stop: int = n
+    while stop > start && is_ws_char(s[stop - 1..stop]) is stop -= 1 end
+    return s[start..stop]
+end
+
+fn is_ws_char(c: string) -> bool is
+    return c == " " || c == "\t" || c == "\n" || c == "\r"
+end
+
+fn to_lower(s: string) -> string is
+    let upper: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    let lower: string = "abcdefghijklmnopqrstuvwxyz"
+    let mut out: string = ""
+    let mut i: int = 0
+    while i < s.len() is
+        let c: string = s[i..i + 1]
+        let pos: int = __builtin_str_index_of(upper, c)
+        if pos >= 0 && c.len() == 1 is
+            out = out + lower[pos..pos + 1]
+        else is
+            out = out + c
+        end
+        i += 1
+    end
+    return out
+end
+
+;; Turns an action string into a (dx, dy) delta; (0, 0) for anything
+;; that isn't a movement action ("wait", "quit", ...).
+pub fn action_delta(action: string) -> (int, int) is
+    if action == "up" is return (0, -1) end
+    if action == "down" is return (0, 1) end
+    if action == "left" is return (-1, 0) end
+    if action == "right" is return (1, 0) end
+    return (0, 0)
+end

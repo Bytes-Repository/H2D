@@ -1,0 +1,169 @@
+mod h2d_canvas
+mod h2d_entity
+mod h2d_tilemap
+mod h2d_input
+mod h2d_ansi
+mod sokoban_levels
+
+fn main() is
+    let count: int = sokoban_levels::level_count()
+    let mut lvl: int = 0
+    let mut quit: bool = false
+    while lvl < count && !quit is
+        let outcome: string = play_level(lvl)
+        if outcome == "quit" is
+            quit = true
+        else is
+            lvl += 1
+        end
+    end
+    if !quit is
+        write("")
+        write(h2d_ansi::style2(h2d_ansi::green(), h2d_ansi::bold()) + "Gratulacje — wszystkie poziomy ukonczone!" + h2d_ansi::reset())
+        write("")
+    end
+end
+
+;; Returns "next" (level solved, or player quit mid-level and chose to
+;; move on — not currently reachable, kept for clarity) or "quit".
+fn play_level(lvl: int) -> string is
+    let rows: [string] = sokoban_levels::level_rows(lvl)
+    let mut map: h2d_tilemap::Tilemap = h2d_tilemap::from_rows(rows)
+
+    let player_start = h2d_tilemap::find_char(map, "@")
+    let mut px: int = player_start.0
+    let mut py: int = player_start.1
+    map = h2d_tilemap::set_tile(map, px, py, " ")
+
+    let mut world: h2d_entity::World = h2d_entity::new_world()
+    let box_xs: [int] = h2d_tilemap::find_all_x(map, "$")
+    let box_ys: [int] = h2d_tilemap::find_all_y(map, "$")
+    let mut bi: int = 0
+    while bi < box_xs.len() is
+        let spawned = h2d_entity::spawn(world, box_xs[bi], box_ys[bi], "$", h2d_ansi::yellow(), "box")
+        world = spawned.0
+        map = h2d_tilemap::set_tile(map, box_xs[bi], box_ys[bi], " ")
+        bi += 1
+    end
+
+    let goal_xs: [int] = h2d_tilemap::find_all_x(map, ".")
+    let goal_ys: [int] = h2d_tilemap::find_all_y(map, ".")
+
+    let mut canvas: h2d_canvas::Canvas = h2d_canvas::new_canvas(map.width + 4, map.height + 6)
+    let mut moves: int = 0
+    let mut running: bool = true
+    let mut outcome: string = "next"
+
+    while running is
+        canvas = render(canvas, map, world, px, py, lvl, moves, goal_xs, goal_ys)
+        canvas = h2d_canvas::present(canvas)
+
+        if all_boxes_on_goals(world, goal_xs, goal_ys) is
+            h2d_canvas::shutdown(canvas)
+            write("")
+            write(h2d_ansi::goal_style() + "*** " + sokoban_levels::level_name(lvl) + " ukonczony w " + to_string(moves) + " ruchach! ***" + h2d_ansi::reset())
+            io_print("Enter, aby kontynuowac...")
+            io_read_line()
+            return "next"
+        end
+
+        let action: string = h2d_input::read_action("")
+        if action == "quit" is
+            h2d_canvas::shutdown(canvas)
+            outcome = "quit"
+            running = false
+        else if action == "restart" is
+            h2d_canvas::shutdown(canvas)
+            return play_level(lvl)
+        else is
+            let delta: (int, int) = h2d_input::action_delta(action)
+            if delta.0 != 0 || delta.1 != 0 is
+                let moved = try_move(world, map, px, py, delta.0, delta.1)
+                world = moved.0
+                px = moved.1
+                py = moved.2
+                if moved.3 is moves += 1 end
+            end
+        end
+    end
+    return outcome
+end
+
+;; (World, new_px, new_py, did_move)
+fn try_move(world: h2d_entity::World, map: h2d_tilemap::Tilemap, px: int, py: int, dx: int, dy: int) -> (h2d_entity::World, int, int, bool) is
+    let nx: int = px + dx
+    let ny: int = py + dy
+    if h2d_tilemap::is_solid(map, nx, ny, "#") is
+        return (world, px, py, false)
+    end
+    if h2d_entity::any_at(world, nx, ny, "box") is
+        let bx2: int = nx + dx
+        let by2: int = ny + dy
+        if h2d_tilemap::is_solid(map, bx2, by2, "#") is return (world, px, py, false) end
+        if h2d_entity::any_at(world, bx2, by2, "box") is return (world, px, py, false) end
+        let box_idx: int = h2d_entity::find_index_at(world, nx, ny)
+        let moved_world: h2d_entity::World = h2d_entity::set_pos_index(world, box_idx, bx2, by2)
+        return (moved_world, nx, ny, true)
+    end
+    return (world, nx, ny, true)
+end
+
+fn is_goal_pos(goal_xs: [int], goal_ys: [int], x: int, y: int) -> bool is
+    let mut i: int = 0
+    while i < goal_xs.len() is
+        if goal_xs[i] == x && goal_ys[i] == y is return true end
+        i += 1
+    end
+    return false
+end
+
+fn all_boxes_on_goals(world: h2d_entity::World, goal_xs: [int], goal_ys: [int]) -> bool is
+    if goal_xs.len() == 0 is return false end
+    let mut i: int = 0
+    while i < goal_xs.len() is
+        if !h2d_entity::any_at(world, goal_xs[i], goal_ys[i], "box") is return false end
+        i += 1
+    end
+    return true
+end
+
+fn render(mut canvas: h2d_canvas::Canvas, map: h2d_tilemap::Tilemap, world: h2d_entity::World, px: int, py: int, lvl: int, moves: int, goal_xs: [int], goal_ys: [int]) -> h2d_canvas::Canvas is
+    canvas = h2d_canvas::clear(canvas, " ", "")
+    canvas = h2d_canvas::draw_text(canvas, 2, 0, sokoban_levels::level_name(lvl), h2d_ansi::style2(h2d_ansi::white(), h2d_ansi::bold()))
+    canvas = h2d_canvas::draw_text(canvas, 2, 1, "Ruchy: " + to_string(moves) + "   [wasd ruch | r restart | q wyjscie]", h2d_ansi::gray())
+
+    let ox: int = 2
+    let oy: int = 3
+    canvas = h2d_canvas::draw_box(canvas, ox - 1, oy - 1, map.width + 2, map.height + 2, h2d_ansi::wall_style())
+
+    let mut y: int = 0
+    while y < map.height is
+        let mut x: int = 0
+        while x < map.width is
+            let ch: string = h2d_tilemap::get_tile(map, x, y)
+            if ch == "#" is
+                canvas = h2d_canvas::set_cell(canvas, ox + x, oy + y, "#", h2d_ansi::wall_style())
+            else if ch == "." is
+                canvas = h2d_canvas::set_cell(canvas, ox + x, oy + y, "*", h2d_ansi::goal_style())
+            else is
+                canvas = h2d_canvas::set_cell(canvas, ox + x, oy + y, ".", h2d_ansi::floor_style())
+            end
+            x += 1
+        end
+        y += 1
+    end
+
+    let boxes: [h2d_entity::Entity] = h2d_entity::all_with_tag(world, "box")
+    let mut bi: int = 0
+    while bi < boxes.len() is
+        let b: h2d_entity::Entity = boxes[bi]
+        let on_goal: bool = is_goal_pos(goal_xs, goal_ys, b.x, b.y)
+        let style: string = if on_goal then h2d_ansi::style2(h2d_ansi::green(), h2d_ansi::bold()) else h2d_ansi::yellow()
+        let glyph: string = if on_goal then "&" else "$"
+        canvas = h2d_canvas::set_cell(canvas, ox + b.x, oy + b.y, glyph, style)
+        bi += 1
+    end
+
+    canvas = h2d_canvas::set_cell(canvas, ox + px, oy + py, "@", h2d_ansi::style2(h2d_ansi::cyan(), h2d_ansi::bold()))
+    return canvas
+end

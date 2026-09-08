@@ -1,0 +1,45 @@
+pub fn fg(r: int, g: int, b: int) -> string is
+    return "\x1b[38;2;" + to_string(clamp255(r)) + ";" + to_string(clamp255(g)) + ";" + to_string(clamp255(b)) + "m"
+end
+
+pub fn bg(r: int, g: int, b: int) -> string is
+    return "\x1b[48;2;" + to_string(clamp255(r)) + ";" + to_string(clamp255(g)) + ";" + to_string(clamp255(b)) + "m"
+end
+
+;; Combine any number of already-built style prefixes (fg, bg, bold, ...)
+;; into one. ANSI codes stack fine when just concatenated, so this is
+;; mostly here for readability at call sites: `style2(fg(...), bold())`.
+pub fn style2(a: string, b2: string) -> string is
+    return a + b2
+end
+
+pub fn style3(a: string, b2: string, c: string) -> string is
+    return a + b2 + c
+end
+
+pub fn bold() -> string is return "\x1b[1m" end
+pub fn dim() -> string is return "\x1b[2m" end
+pub fn underline() -> string is return "\x1b[4m" end
+pub fn reset() -> string is return "\x1b[0m" end
+
+fn clamp255(v: int) -> int is
+    if v < 0 is return 0 end
+    if v > 255 is return 255 end
+    return v
+end
+
+;; A small named palette so game code can write `palette::red()` instead
+;; of memorizing RGB triples. Feel free to ignore and call fg()/bg()
+;; directly for anything not listed here.
+pub fn red()        -> string is return fg(220, 50, 47) end
+pub fn green()      -> string is return fg(90, 200, 90) end
+pub fn yellow()     -> string is return fg(230, 200, 60) end
+pub fn blue()       -> string is return fg(60, 130, 220) end
+pub fn magenta()    -> string is return fg(200, 80, 200) end
+pub fn cyan()       -> string is return fg(60, 200, 200) end
+pub fn white()      -> string is return fg(230, 230, 230) end
+pub fn gray()       -> string is return fg(120, 120, 120) end
+pub fn black_bg()   -> string is return bg(10, 10, 10) end
+pub fn wall_style() -> string is return style2(fg(160, 130, 90), bg(40, 30, 20)) end
+pub fn floor_style()-> string is return fg(70, 70, 80) end
+pub fn goal_style()  -> string is return style2(fg(255, 215, 0), bold()) end

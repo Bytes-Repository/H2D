@@ -1,0 +1,46 @@
+use "std -> time" from "time"
+
+pub struct Clock is
+    pub last_ms: int
+    pub start_ms: int
+end
+
+pub fn new_clock() -> Clock is
+    let now: int = time::now_ms()
+    return Clock { last_ms: now, start_ms: now }
+end
+
+;; Milliseconds elapsed since the previous tick() call, and resets the
+;; internal marker — call once per frame/turn.
+pub fn tick(mut clock: Clock) -> (Clock, int) is
+    let now: int = time::now_ms()
+    let delta: int = now - clock.last_ms
+    clock.last_ms = now
+    return (clock, delta)
+end
+
+pub fn elapsed_ms(clock: Clock) -> int is
+    return time::now_ms() - clock.start_ms
+end
+
+;; Sleeps just long enough that the time since `frame_start_ms` reaches
+;; `1000 / target_fps`, so a loop with cheap logic doesn't spin the CPU
+;; at 100% redrawing the same frame thousands of times a second. Does
+;; nothing (no negative sleep) if the frame already ran over budget.
+pub fn cap_fps(frame_start_ms: int, target_fps: int) is
+    if target_fps <= 0 is return end
+    let budget: int = 1000 / target_fps
+    let spent: int = time::now_ms() - frame_start_ms
+    let remaining: int = budget - spent
+    if remaining > 0 is
+        time::sleep_ms(remaining)
+    end
+end
+
+pub fn now_ms() -> int is
+    return time::now_ms()
+end
+
+pub fn sleep_ms(ms: int) is
+    time::sleep_ms(ms)
+end

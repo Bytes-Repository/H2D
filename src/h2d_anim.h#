@@ -1,0 +1,49 @@
+mod h2d_sprite
+
+pub struct Animation is
+    pub frames:     [h2d_sprite::Sprite]
+    pub frame_ms:   int
+    pub elapsed_ms: int
+    pub current:    int
+    pub looping:    bool
+    pub finished:   bool
+end
+
+pub fn new_animation(frames: [h2d_sprite::Sprite], frame_ms: int, looping: bool) -> Animation is
+    return Animation { frames: frames, frame_ms: frame_ms, elapsed_ms: 0, current: 0, looping: looping, finished: false }
+end
+
+;; A one-shot animation stops (and stays) on its last frame instead of
+;; looping — handy for e.g. an attack swing or an explosion.
+pub fn new_once(frames: [h2d_sprite::Sprite], frame_ms: int) -> Animation is
+    return new_animation(frames, frame_ms, false)
+end
+
+pub fn update(mut anim: Animation, dt_ms: int) -> Animation is
+    if anim.finished is return anim end
+    anim.elapsed_ms += dt_ms
+    while anim.elapsed_ms >= anim.frame_ms is
+        anim.elapsed_ms -= anim.frame_ms
+        anim.current += 1
+        if anim.current >= anim.frames.len() is
+            if anim.looping is
+                anim.current = 0
+            else is
+                anim.current = anim.frames.len() - 1
+                anim.finished = true
+            end
+        end
+    end
+    return anim
+end
+
+pub fn current_sprite(anim: Animation) -> h2d_sprite::Sprite is
+    return anim.frames[anim.current]
+end
+
+pub fn reset(mut anim: Animation) -> Animation is
+    anim.current = 0
+    anim.elapsed_ms = 0
+    anim.finished = false
+    return anim
+end

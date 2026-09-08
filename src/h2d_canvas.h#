@@ -1,0 +1,190 @@
+use "std -> term" from "term"
+use "std -> io" from "io"
+
+pub struct Canvas is
+    pub width:  int
+    pub height: int
+    pub chars:  [string]   ;; flat, row-major, length width*height
+    pub styles: [string]   ;; ansi prefix per cell, "" = default terminal color
+    pub prev_chars:  [string]
+    pub prev_styles: [string]
+    pub first_frame: bool
+end
+
+;; ── construction ────────────────────────────────────────────────────
+
+fn fill_array(n: int, val: string) -> [string] is
+    let mut out: [string] = []
+    let mut i: int = 0
+    while i < n is
+        out.push(val)
+        i += 1
+    end
+    return out
+end
+
+pub fn new_canvas(width: int, height: int) -> Canvas is
+    let n: int = width * height
+    return Canvas {
+        width: width,
+        height: height,
+        chars: fill_array(n, " "),
+        styles: fill_array(n, ""),
+        prev_chars: fill_array(n, "\x00"),   ;; guaranteed to differ -> first present() draws everything
+        prev_styles: fill_array(n, ""),
+        first_frame: true,
+    }
+end
+
+fn idx(c: Canvas, x: int, y: int) -> int is
+    return y * c.width + x
+end
+
+fn in_bounds(c: Canvas, x: int, y: int) -> bool is
+    return x >= 0 && y >= 0 && x < c.width && y < c.height
+end
+
+;; ── drawing (all clip silently — off-canvas draws are simply ignored,
+;;    the same way most 2D engines treat out-of-viewport draws) ───────
+
+pub fn clear(mut c: Canvas, bg_char: string, style: string) -> Canvas is
+    let n: int = c.width * c.height
+    let mut i: int = 0
+    while i < n is
+        c.chars[i] = bg_char
+        c.styles[i] = style
+        i += 1
+    end
+    return c
+end
+
+pub fn set_cell(mut c: Canvas, x: int, y: int, ch: string, style: string) -> Canvas is
+    if !in_bounds(c, x, y) is return c end
+    let i: int = idx(c, x, y)
+    c.chars[i] = ch
+    c.styles[i] = style
+    return c
+end
+
+pub fn draw_text(mut c: Canvas, x: int, y: int, text: string, style: string) -> Canvas is
+    let n: int = text.len()
+    let mut i: int = 0
+    while i < n is
+        c = set_cell(c, x + i, y, text[i..i + 1], style)
+        i += 1
+    end
+    return c
+end
+
+pub fn draw_rect(mut c: Canvas, x: int, y: int, w: int, h: int, ch: string, style: string) -> Canvas is
+    let mut row: int = 0
+    while row < h is
+        let mut col: int = 0
+        while col < w is
+            c = set_cell(c, x + col, y + row, ch, style)
+            col += 1
+        end
+        row += 1
+    end
+    return c
+end
+
+;; Outline box using single-line box-drawing characters.
+pub fn draw_box(mut c: Canvas, x: int, y: int, w: int, h: int, style: string) -> Canvas is
+    c = set_cell(c, x, y, "┌", style)
+    c = set_cell(c, x + w - 1, y, "┐", style)
+    c = set_cell(c, x, y + h - 1, "└", style)
+    c = set_cell(c, x + w - 1, y + h - 1, "┘", style)
+    let mut i: int = 1
+    while i < w - 1 is
+        c = set_cell(c, x + i, y, "─", style)
+        c = set_cell(c, x + i, y + h - 1, "─", style)
+        i += 1
+    end
+    i = 1
+    while i < h - 1 is
+        c = set_cell(c, x, y + i, "│", style)
+        c = set_cell(c, x + w - 1, y + i, "│", style)
+        i += 1
+    end
+    return c
+end
+
+;; Blit a Sprite (see sprite.h#) at top-left corner (x, y). Cells whose
+;; source glyph equals the sprite's transparent_char are skipped, so
+;; sprites can be non-rectangular against whatever is already drawn.
+pub fn blit_sprite(mut c: Canvas, x: int, y: int, rows: [string], style: string, transparent_char: string) -> Canvas is
+    let mut row_i: int = 0
+    let row_count: int = rows.len()
+    while row_i < row_count is
+        let row: string = rows[row_i]
+        let row_len: int = row.len()
+        let mut col_i: int = 0
+        while col_i < row_len is
+            let glyph: string = row[col_i..col_i + 1]
+            if glyph != transparent_char is
+                c = set_cell(c, x + col_i, y + row_i, glyph, style)
+            end
+            col_i += 1
+        end
+        row_i += 1
+    end
+    return c
+end
+
+;; ── presenting to the real terminal ────────────────────────────────
+
+;; Redraw only cells that changed since the last present() (char OR
+;; style). Cursor motion (`term::move_to`) is 1-indexed, so we add 1.
+;; This keeps frame time roughly proportional to how much of the screen
+;; actually changed instead of the whole width*height every tick, which
+;; matters a lot once you're doing sleep_ms-based real-time animation.
+pub fn present(mut c: Canvas) -> Canvas is
+    if c.first_frame is
+        term::hide_cursor()
+    end
+    let n: int = c.width * c.height
+    let mut i: int = 0
+    let mut out: string = ""
+    let mut last_x: int = -2
+    let mut last_y: int = -2
+    while i < n is
+        if c.chars[i] != c.prev_chars[i] || c.styles[i] != c.prev_styles[i] is
+            let x: int = i % c.width
+            let y: int = i / c.width
+            ;; only emit a cursor-move escape when we're not already
+            ;; sitting right after the previous changed cell
+            if !(y == last_y && x == last_x + 1) is
+                out = out + "\x1b[" + to_string(y + 1) + ";" + to_string(x + 1) + "H"
+            end
+            if c.styles[i] != "" is
+                out = out + c.styles[i] + c.chars[i] + "\x1b[0m"
+            else is
+                out = out + c.chars[i]
+            end
+            last_x = x
+            last_y = y
+        end
+        c.prev_chars[i] = c.chars[i]
+        c.prev_styles[i] = c.styles[i]
+        i += 1
+    end
+    io::write_no_nl(out)
+    c.first_frame = false
+    return c
+end
+
+;; Force a full redraw next present() (e.g. after the user resized their
+;; terminal, or after printing something outside the canvas that could
+;; have disturbed the grid).
+pub fn invalidate(mut c: Canvas) -> Canvas is
+    let n: int = c.width * c.height
+    c.prev_chars = fill_array(n, "\x00")
+    c.prev_styles = fill_array(n, "")
+    return c
+end
+
+pub fn shutdown(c: Canvas) is
+    term::show_cursor()
+    write("")
+end

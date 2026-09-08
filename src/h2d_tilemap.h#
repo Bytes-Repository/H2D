@@ -1,0 +1,78 @@
+pub struct Tilemap is
+    pub width:  int
+    pub height: int
+    pub rows:   [string]
+end
+
+pub fn from_rows(rows: [string]) -> Tilemap is
+    let h: int = rows.len()
+    let mut w: int = 0
+    if h > 0 is w = rows[0].len() end
+    return Tilemap { width: w, height: h, rows: rows }
+end
+
+pub fn get_tile(map: Tilemap, x: int, y: int) -> string is
+    if x < 0 || y < 0 || x >= map.width || y >= map.height is return "#" end
+    let row: string = map.rows[y]
+    return row[x..x + 1]
+end
+
+pub fn set_tile(mut map: Tilemap, x: int, y: int, ch: string) -> Tilemap is
+    if x < 0 || y < 0 || x >= map.width || y >= map.height is return map end
+    let row: string = map.rows[y]
+    let new_row: string = row[0..x] + ch + row[x + 1..map.width]
+    map.rows[y] = new_row
+    return map
+end
+
+;; True if `ch` appears in `solid_chars` (e.g. is_solid(map, x, y, "#")
+;; treats only walls as solid; is_solid(map, x, y, "#$") also blocks box
+;; tiles for movement purposes).
+pub fn is_solid(map: Tilemap, x: int, y: int, solid_chars: string) -> bool is
+    let ch: string = get_tile(map, x, y)
+    return __builtin_str_index_of(solid_chars, ch) >= 0
+end
+
+;; First (x, y) whose tile equals `ch`, or (-1, -1) if none. Handy for
+;; pulling a spawn point or a single special tile out of level data.
+pub fn find_char(map: Tilemap, ch: string) -> (int, int) is
+    let mut y: int = 0
+    while y < map.height is
+        let mut x: int = 0
+        while x < map.width is
+            if get_tile(map, x, y) == ch is return (x, y) end
+            x += 1
+        end
+        y += 1
+    end
+    return (-1, -1)
+end
+
+;; All (x, y) whose tile equals `ch`, as parallel arrays.
+pub fn find_all_x(map: Tilemap, ch: string) -> [int] is
+    let mut out: [int] = []
+    let mut y: int = 0
+    while y < map.height is
+        let mut x: int = 0
+        while x < map.width is
+            if get_tile(map, x, y) == ch is out.push(x) end
+            x += 1
+        end
+        y += 1
+    end
+    return out
+end
+
+pub fn find_all_y(map: Tilemap, ch: string) -> [int] is
+    let mut out: [int] = []
+    let mut y: int = 0
+    while y < map.height is
+        let mut x: int = 0
+        while x < map.width is
+            if get_tile(map, x, y) == ch is out.push(y) end
+            x += 1
+        end
+        y += 1
+    end
+    return out
+end

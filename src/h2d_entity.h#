@@ -1,0 +1,99 @@
+pub struct Entity is
+    pub id:    int
+    pub x:     int
+    pub y:     int
+    pub glyph: string
+    pub style: string
+    pub tag:   string   ;; free-form: "player", "box", "goal", "wall", ...
+    pub alive: bool
+end
+
+pub struct World is
+    pub entities: [Entity]
+    pub next_id:  int
+end
+
+pub fn new_world() -> World is
+    return World { entities: [], next_id: 1 }
+end
+
+;; Returns the updated World AND the new entity's id (H# tuple return —
+;; `let (world, id) = h2d_entity::spawn(world, ...)`).
+pub fn spawn(mut world: World, x: int, y: int, glyph: string, style: string, tag: string) -> (World, int) is
+    let e: Entity = Entity { id: world.next_id, x: x, y: y, glyph: glyph, style: style, tag: tag, alive: true }
+    world.entities.push(e)
+    let assigned_id: int = world.next_id
+    world.next_id += 1
+    return (world, assigned_id)
+end
+
+pub fn despawn(mut world: World, id: int) -> World is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].id == id is
+            world.entities[i].alive = false
+        end
+        i += 1
+    end
+    return world
+end
+
+;; -1 if nothing alive matches.
+pub fn find_index_by_id(world: World, id: int) -> int is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].id == id && world.entities[i].alive is return i end
+        i += 1
+    end
+    return -1
+end
+
+;; -1 if nothing alive occupies (x, y). If several entities share a
+;; cell (e.g. a goal under a box), the most recently spawned wins.
+pub fn find_index_at(world: World, x: int, y: int) -> int is
+    let mut i: int = world.entities.len() - 1
+    while i >= 0 is
+        if world.entities[i].alive && world.entities[i].x == x && world.entities[i].y == y is return i end
+        i -= 1
+    end
+    return -1
+end
+
+pub fn any_at(world: World, x: int, y: int, tag: string) -> bool is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        let e: Entity = world.entities[i]
+        if e.alive && e.x == x && e.y == y && e.tag == tag is return true end
+        i += 1
+    end
+    return false
+end
+
+pub fn all_with_tag(world: World, tag: string) -> [Entity] is
+    let mut out: [Entity] = []
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].alive && world.entities[i].tag == tag is out.push(world.entities[i]) end
+        i += 1
+    end
+    return out
+end
+
+pub fn count_with_tag(world: World, tag: string) -> int is
+    return all_with_tag(world, tag).len()
+end
+
+;; Move the entity at `index` by (dx, dy). Caller is responsible for
+;; collision/walkability checks beforehand (see collision.h#) — H2D
+;; stays unopinionated about game rules here.
+pub fn move_index(mut world: World, index: int, dx: int, dy: int) -> World is
+    world.entities[index].x += dx
+    world.entities[index].y += dy
+    return world
+end
+
+pub fn set_pos_index(mut world: World, index: int, x: int, y: int) -> World is
+    world.entities[index].x = x
+    world.entities[index].y = y
+    return world
+end

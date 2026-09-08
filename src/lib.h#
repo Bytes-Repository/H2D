@@ -1,1 +1,20 @@
+mod h2d_vec2
+mod h2d_ansi
+mod h2d_sprite
+mod h2d_canvas
+mod h2d_entity
+mod h2d_input
+mod h2d_timer
+mod h2d_collision
+mod h2d_tilemap
+mod h2d_app
+mod h2d_camera
+mod h2d_anim
+mod h2d_audio
+mod h2d_random
+mod h2d_pathfind
+mod h2d_menu
 
+pub fn version() -> string is
+    return "0.1.0"
+end

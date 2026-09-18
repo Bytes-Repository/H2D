@@ -1,45 +1,70 @@
-pub fn point_in_rect(px: int, py: int, rx: int, ry: int, rw: int, rh: int) -> bool is
+mod h2d_vec2
+
+;; Pixel/world-space collision for h2d_gfx's graphics engine — the
+;; float counterpart to h2d_collision.h#'s grid-cell integer collision
+;; for the text engine (kept as-is; separate module, since AABBs here
+;; are float rectangles in continuous space, not integer grid cells).
+
+pub fn point_in_rect(px: f64, py: f64, rx: f64, ry: f64, rw: f64, rh: f64) -> bool is
     return px >= rx && py >= ry && px < rx + rw && py < ry + rh
 end
 
-pub fn rects_intersect(ax: int, ay: int, aw: int, ah: int, bx: int, by: int, bw: int, bh: int) -> bool is
+pub fn rects_intersect(ax: f64, ay: f64, aw: f64, ah: f64, bx: f64, by: f64, bw: f64, bh: f64) -> bool is
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
 end
 
-pub fn same_cell(ax: int, ay: int, bx: int, by: int) -> bool is
-    return ax == bx && ay == by
+;; Overlap rectangle of two intersecting AABBs, as (x, y, w, h) — width
+;; and/or height are <= 0.0 if the rects don't actually overlap (check
+;; rects_intersect first if you just need the yes/no).
+pub fn intersection_rect(ax: f64, ay: f64, aw: f64, ah: f64, bx: f64, by: f64, bw: f64, bh: f64) -> (f64, f64, f64, f64) is
+    let x1: f64 = f64_max(ax, bx)
+    let y1: f64 = f64_max(ay, by)
+    let x2: f64 = f64_min(ax + aw, bx + bw)
+    let y2: f64 = f64_min(ay + ah, by + bh)
+    return (x1, y1, x2 - x1, y2 - y1)
 end
 
-;; The four orthogonal neighbours of (x, y) as parallel arrays (H# has
-;; no array-of-tuples ergonomics worth relying on yet) — index 0..3
-;; corresponds to up/down/left/right, matching input::action_delta's
-;; ordering conceptually (not literally, since that one returns deltas
-;; not coordinates).
-pub fn neighbors_x(x: int) -> [int] is
-    let mut out: [int] = []
-    out.push(x)
-    out.push(x)
-    out.push(x - 1)
-    out.push(x + 1)
-    return out
+pub fn circles_intersect(ax: f64, ay: f64, aradius: f64, bx: f64, by: f64, bradius: f64) -> bool is
+    let dx: f64 = ax - bx
+    let dy: f64 = ay - by
+    let dist_sq: f64 = dx * dx + dy * dy
+    let r_sum: f64 = aradius + bradius
+    return dist_sq <= r_sum * r_sum
 end
 
-pub fn neighbors_y(y: int) -> [int] is
-    let mut out: [int] = []
-    out.push(y - 1)
-    out.push(y + 1)
-    out.push(y)
-    out.push(y)
-    return out
+;; Closest point on AABB (rx, ry, rw, rh) to (cx, cy), used internally
+;; by circle_rect_intersect — exposed too since it's handy on its own
+;; for e.g. clamping an entity to a room's bounds.
+pub fn closest_point_on_rect(px: f64, py: f64, rx: f64, ry: f64, rw: f64, rh: f64) -> (f64, f64) is
+    let cx: f64 = f64_clamp(px, rx, rx + rw)
+    let cy: f64 = f64_clamp(py, ry, ry + rh)
+    return (cx, cy)
 end
 
-pub fn manhattan_dist(ax: int, ay: int, bx: int, by: int) -> int is
-    let dx: int = ax - bx
-    let dy: int = ay - by
-    return abs_int(dx) + abs_int(dy)
+pub fn circle_rect_intersect(cx: f64, cy: f64, radius: f64, rx: f64, ry: f64, rw: f64, rh: f64) -> bool is
+    let closest = closest_point_on_rect(cx, cy, rx, ry, rw, rh)
+    let dx: f64 = cx - closest.0
+    let dy: f64 = cy - closest.1
+    return (dx * dx + dy * dy) <= radius * radius
 end
 
-fn abs_int(v: int) -> int is
-    if v < 0 is return -v end
+pub fn distance(ax: f64, ay: f64, bx: f64, by: f64) -> f64 is
+    let v: h2d_vec2::Vec2 = h2d_vec2::vec2(ax - bx, ay - by)
+    return v.length()
+end
+
+fn f64_max(a: f64, b: f64) -> f64 is
+    if a > b is return a end
+    return b
+end
+
+fn f64_min(a: f64, b: f64) -> f64 is
+    if a < b is return a end
+    return b
+end
+
+fn f64_clamp(v: f64, lo: f64, hi: f64) -> f64 is
+    if v < lo is return lo end
+    if v > hi is return hi end
     return v
 end

@@ -1,7 +1,7 @@
 [package]
 -> name        => h2d
 -> version     => 0.1.0
--> description => 2D game engine for H# (character-grid / ANSI truecolor renderer, entities, tilemaps, turn-based input)
+-> description => 2D game engine for H#. Primary engine: real windowed/GPU graphics via SDL2 (h2d_gfx/h2d_texture/h2d_input2d/h2d_audio2/...). Also includes the original character-grid ANSI truecolor text engine (h2d_canvas/h2d_entity/...), kept for turn-based games.
 -> author      => Bytes Developers
 -> license     => MIT
 
@@ -12,3 +12,7 @@
 -> emit   => lib
 
 [deps]
+-> sdl2        => dynamic
+-> SDL2_image  => dynamic
+-> SDL2_mixer  => dynamic
+-> SDL2_gfx    => dynamic

@@ -1,41 +1,89 @@
-pub struct AudioState is
-    pub debug: bool
+extern dynamic [c, "h2d_native"] is
+    fn h2d_audio_init() -> int
+    fn h2d_load_sound(path: string) -> int
+    fn h2d_play_sound(handle: int)
+    fn h2d_play_sound_loop(handle: int)
+    fn h2d_set_sound_volume(handle: int, volume: f64)
+    fn h2d_stop_all_sounds()
+    fn h2d_load_music(path: string) -> int
+    fn h2d_play_music(handle: int, do_loop: int)
+    fn h2d_stop_music()
+    fn h2d_set_music_volume(volume: f64)
 end
 
-pub fn new_audio(debug: bool) -> AudioState is
-    return AudioState { debug: debug }
+;; Opens the audio device (44.1kHz stereo). Returns false if the
+;; platform has no audio device available (common in CI/headless
+;; sandboxes) — every other function in this module is then a safe
+;; no-op, so a game doesn't need to branch on this itself unless it
+;; wants to warn the player.
+pub fn audio_init() -> bool is
+    return h2d_audio_init() != 0
 end
 
-;; `name` is any identifier you choose ("coin", "hit", "music/theme",
-;; a file path — it's meaningless today, purely for your own logging
-;; and for a future real backend to key off of).
-pub fn play(state: AudioState, name: string) is
-    if state.debug is
-        write("[h2d_audio] play: " + name)
-    end
+;; A short sound effect, fully decoded into memory (SDL2_mixer's
+;; Mix_Chunk) — right for jumps/hits/coins, wrong for a multi-minute
+;; soundtrack (use load_music for that). WAV, OGG, and a few others are
+;; supported depending on the SDL2_mixer build; WAV is always safe.
+;; `handle == 0` means the load failed (bad path/format, or audio not
+;; initialized) — every play_sound* call on an invalid handle is a
+;; silent no-op.
+pub struct Sound is
+    pub handle: int
 end
 
-pub fn play_loop(state: AudioState, name: string) is
-    if state.debug is
-        write("[h2d_audio] play_loop: " + name)
-    end
+pub fn load_sound(path: string) -> Sound is
+    return Sound { handle: h2d_load_sound(path) }
 end
 
-pub fn stop(state: AudioState, name: string) is
-    if state.debug is
-        write("[h2d_audio] stop: " + name)
-    end
+pub fn is_valid_sound(s: Sound) -> bool is
+    return s.handle != 0
 end
 
-pub fn stop_all(state: AudioState) is
-    if state.debug is
-        write("[h2d_audio] stop_all")
-    end
+pub fn play_sound(s: Sound) is
+    h2d_play_sound(s.handle)
+end
+
+pub fn play_sound_loop(s: Sound) is
+    h2d_play_sound_loop(s.handle)
 end
 
 ;; volume in [0.0, 1.0].
-pub fn set_volume(state: AudioState, name: string, volume: f64) is
-    if state.debug is
-        write("[h2d_audio] set_volume: " + name + " -> " + to_string(volume))
-    end
+pub fn set_sound_volume(s: Sound, volume: f64) is
+    h2d_set_sound_volume(s.handle, volume)
+end
+
+pub fn stop_all_sounds() is
+    h2d_stop_all_sounds()
+end
+
+;; Streamed background music (SDL2_mixer's Mix_Music) — only one track
+;; plays at a time (starting a new one stops whatever was playing), so
+;; this models "the current song", not a mixer channel like Sound does.
+;; MP3, OGG, and a few others are supported depending on the
+;; SDL2_mixer build.
+pub struct Music is
+    pub handle: int
+end
+
+pub fn load_music(path: string) -> Music is
+    return Music { handle: h2d_load_music(path) }
+end
+
+pub fn is_valid_music(m: Music) -> bool is
+    return m.handle != 0
+end
+
+pub fn play_music(m: Music, looping: bool) is
+    let l: int = if looping then 1 else 0
+    h2d_play_music(m.handle, l)
+end
+
+pub fn stop_music() is
+    h2d_stop_music()
+end
+
+;; volume in [0.0, 1.0]. Applies to whichever music is currently
+;; playing (SDL2_mixer has one global music volume, not per-track).
+pub fn set_music_volume(volume: f64) is
+    h2d_set_music_volume(volume)
 end

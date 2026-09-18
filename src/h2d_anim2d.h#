@@ -1,35 +1,53 @@
-mod h2d_sprite
+mod h2d_texture
+mod h2d_color
 
-pub struct Animation is
-    pub frames:     [h2d_sprite::Sprite]
-    pub frame_ms:   int
-    pub elapsed_ms: int
-    pub current:    int
-    pub looping:    bool
-    pub finished:   bool
+;; Sprite-sheet frame animation for h2d_gfx's graphics engine — the
+;; pixel-texture counterpart to h2d_anim.h#'s ASCII-sprite animation
+;; for the text engine (kept as-is; separate module, since this one
+;; walks frames across one texture atlas instead of an array of
+;; pre-built h2d_sprite::Sprite values).
+;;
+;; Assumes a typical spritesheet layout: `frame_count` equal-sized
+;; frames of (frame_w x frame_h) pixels, laid out left-to-right,
+;; wrapping to the next row every `columns` frames (pass `frame_count`
+;; itself as `columns` for a single-row strip, the common case).
+
+pub struct SpriteSheetAnim is
+    pub texture:     h2d_texture::Texture2D
+    pub frame_w:      f64
+    pub frame_h:      f64
+    pub columns:      int
+    pub frame_count:  int
+    pub frame_ms:     int
+    pub elapsed_ms:   int
+    pub current:      int
+    pub looping:      bool
+    pub finished:     bool
 end
 
-pub fn new_animation(frames: [h2d_sprite::Sprite], frame_ms: int, looping: bool) -> Animation is
-    return Animation { frames: frames, frame_ms: frame_ms, elapsed_ms: 0, current: 0, looping: looping, finished: false }
+pub fn new_sheet_anim(texture: h2d_texture::Texture2D, frame_w: f64, frame_h: f64, columns: int, frame_count: int, frame_ms: int, looping: bool) -> SpriteSheetAnim is
+    return SpriteSheetAnim {
+        texture: texture, frame_w: frame_w, frame_h: frame_h,
+        columns: columns, frame_count: frame_count, frame_ms: frame_ms,
+        elapsed_ms: 0, current: 0, looping: looping, finished: false,
+    }
 end
 
-;; A one-shot animation stops (and stays) on its last frame instead of
-;; looping — handy for e.g. an attack swing or an explosion.
-pub fn new_once(frames: [h2d_sprite::Sprite], frame_ms: int) -> Animation is
-    return new_animation(frames, frame_ms, false)
-end
-
-pub fn update(mut anim: Animation, dt_ms: int) -> Animation is
+;; `dt_ms` is milliseconds elapsed this frame — pass
+;; `__builtin_conv_float_to_int(h2d_gfx::get_frame_time() * 1000.0)`,
+;; or just track your own accumulated-ms clock if you'd rather not
+;; round every frame.
+pub fn update(mut anim: SpriteSheetAnim, dt_ms: int) -> SpriteSheetAnim is
     if anim.finished is return anim end
     anim.elapsed_ms += dt_ms
-    while anim.elapsed_ms >= anim.frame_ms is
+    while anim.elapsed_ms >= anim.frame_ms && anim.frame_ms > 0 is
         anim.elapsed_ms -= anim.frame_ms
         anim.current += 1
-        if anim.current >= anim.frames.len() is
+        if anim.current >= anim.frame_count is
             if anim.looping is
                 anim.current = 0
             else is
-                anim.current = anim.frames.len() - 1
+                anim.current = anim.frame_count - 1
                 anim.finished = true
             end
         end
@@ -37,13 +55,27 @@ pub fn update(mut anim: Animation, dt_ms: int) -> Animation is
     return anim
 end
 
-pub fn current_sprite(anim: Animation) -> h2d_sprite::Sprite is
-    return anim.frames[anim.current]
-end
-
-pub fn reset(mut anim: Animation) -> Animation is
+pub fn reset(mut anim: SpriteSheetAnim) -> SpriteSheetAnim is
     anim.current = 0
     anim.elapsed_ms = 0
     anim.finished = false
     return anim
+end
+
+fn src_x_for(anim: SpriteSheetAnim, frame: int) -> f64 is
+    let col: int = frame % anim.columns
+    return (col + 0.0) * anim.frame_w
+end
+
+fn src_y_for(anim: SpriteSheetAnim, frame: int) -> f64 is
+    let row: int = frame / anim.columns
+    return (row + 0.0) * anim.frame_h
+end
+
+;; Draws the animation's current frame at (x, y), scaled to
+;; (dst_w, dst_h) (pass anim.frame_w/anim.frame_h for 1:1 size).
+pub fn draw(anim: SpriteSheetAnim, x: f64, y: f64, dst_w: f64, dst_h: f64, tint: h2d_color::Color) is
+    let sx: f64 = src_x_for(anim, anim.current)
+    let sy: f64 = src_y_for(anim, anim.current)
+    h2d_texture::draw_texture_rec(anim.texture, sx, sy, anim.frame_w, anim.frame_h, x, y, dst_w, dst_h, tint)
 end

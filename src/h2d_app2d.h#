@@ -1,35 +1,47 @@
-mod h2d_canvas
-mod h2d_entity
-mod h2d_timer
+mod h2d_gfx
+mod h2d_entity2d
+mod h2d_camera2d
 
-pub struct App is
-    pub canvas:  h2d_canvas::Canvas
-    pub world:   h2d_entity::World
-    pub clock:   h2d_timer::Clock
+;; Convenience bundle for h2d_gfx's graphics engine — the pixel-graphics
+;; counterpart to h2d_app.h#'s Canvas/World/Clock bundle for the text
+;; engine (kept as-is; separate struct). Entirely optional: everything
+;; here is a thin wrapper over h2d_gfx/h2d_entity2d/h2d_camera2d calls
+;; you can just make directly if you'd rather not use one struct for
+;; "the whole app".
+
+pub struct App2D is
+    pub world:  h2d_entity2d::World2D
+    pub camera: h2d_camera2d::Camera2D
     pub running: bool
-    pub turn:    int
 end
 
-pub fn new_app(width: int, height: int) -> App is
-    return App {
-        canvas: h2d_canvas::new_canvas(width, height),
-        world: h2d_entity::new_world(),
-        clock: h2d_timer::new_clock(),
+;; Opens the window (see h2d_gfx::init_window) and returns a ready-to-use
+;; App2D with an empty World2D and a camera centered on the window.
+;; `title` is the window title bar text.
+pub fn new_app2d(width: int, height: int, title: string, target_fps: int) -> App2D is
+    h2d_gfx::init_window(width, height, title)
+    h2d_gfx::set_target_fps(target_fps)
+    return App2D {
+        world: h2d_entity2d::new_world2d(),
+        camera: h2d_camera2d::new_camera2d_centered(width, height),
         running: true,
-        turn: 0,
     }
 end
 
-pub fn quit(mut app: App) -> App is
-    app.running = false
-    return app
+;; True while the window is open and nothing has asked to quit —
+;; combines h2d_gfx::window_should_close() with the app's own
+;; `running` flag (set false by your own game-over/menu-quit logic via
+;; `app.running = false` — H# structs mutate through the owning
+;; variable directly, no setter needed).
+pub fn is_running(app: App2D) -> bool is
+    return app.running && !h2d_gfx::window_should_close()
 end
 
-pub fn next_turn(mut app: App) -> App is
-    app.turn += 1
-    return app
+;; Ends the current frame and begins the next (see h2d_gfx::next_frame).
+pub fn next_frame(app: App2D) is
+    h2d_gfx::next_frame()
 end
 
-pub fn shutdown(app: App) is
-    h2d_canvas::shutdown(app.canvas)
+pub fn shutdown(app: App2D) is
+    h2d_gfx::close_window()
 end

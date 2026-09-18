@@ -1,0 +1,172 @@
+mod h2d_gfx
+mod h2d_color
+mod h2d_keys
+mod h2d_input2d
+mod h2d_collision2d
+mod h2d_audio2
+
+;; Two-player Pong — the graphics engine's demo game, playable with a
+;; real window, real-time keys, and (if the platform has an audio
+;; device) a real bounce sound. Compare against sokoban_main.h# /
+;; sokoban_levels.h#, the equivalent demo for the older text engine:
+;; same "here's a whole playable game built only from H2D's own public
+;; API" role, pixel/real-time engine this time instead of
+;; grid/turn-based.
+;;
+;; Controls: left paddle W/S, right paddle Up/Down arrows, Esc to quit.
+
+const SCREEN_W: int = 800
+const SCREEN_H: int = 480
+const PADDLE_W: f64 = 14.0
+const PADDLE_H: f64 = 90.0
+const PADDLE_SPEED: f64 = 420.0
+const BALL_SIZE: f64 = 14.0
+const BALL_SPEED_START: f64 = 320.0
+
+struct GameState is
+    pub left_y:   f64
+    pub right_y:  f64
+    pub ball_x:   f64
+    pub ball_y:   f64
+    pub ball_vx:  f64
+    pub ball_vy:  f64
+    pub left_score:  int
+    pub right_score: int
+end
+
+fn main() is
+    h2d_gfx::init_window(SCREEN_W, SCREEN_H, "H2D — Pong (silnik graficzny)")
+    h2d_gfx::set_target_fps(60)
+    let audio_ok: bool = h2d_audio2::audio_init()
+    ;; Optional: drop a real "bounce.wav" next to the binary to hear it;
+    ;; load_sound cleanly returns an invalid (handle == 0) Sound instead
+    ;; of crashing if the file isn't there, so this line is always safe.
+    let bounce: h2d_audio2::Sound = h2d_audio2::load_sound("assets/bounce.wav")
+
+    let mut state: GameState = new_game()
+
+    while !h2d_gfx::window_should_close() is
+        let dt: f64 = h2d_gfx::get_frame_time()
+
+        if h2d_input2d::is_key_pressed(h2d_keys::key_escape()) is
+            h2d_gfx::close_window()
+            return
+        end
+
+        state = handle_input(state, dt)
+        state = step_ball(state, dt, bounce, audio_ok)
+
+        h2d_gfx::clear_background(h2d_color::black())
+        draw(state)
+        h2d_gfx::next_frame()
+    end
+
+    h2d_gfx::close_window()
+end
+
+fn new_game() -> GameState is
+    return GameState {
+        left_y: (SCREEN_H + 0.0) / 2.0 - PADDLE_H / 2.0,
+        right_y: (SCREEN_H + 0.0) / 2.0 - PADDLE_H / 2.0,
+        ball_x: (SCREEN_W + 0.0) / 2.0,
+        ball_y: (SCREEN_H + 0.0) / 2.0,
+        ball_vx: BALL_SPEED_START,
+        ball_vy: 140.0,
+        left_score: 0,
+        right_score: 0,
+    }
+end
+
+fn handle_input(mut state: GameState, dt: f64) -> GameState is
+    if h2d_input2d::is_key_down(h2d_keys::key_w()) is state.left_y -= PADDLE_SPEED * dt end
+    if h2d_input2d::is_key_down(h2d_keys::key_s()) is state.left_y += PADDLE_SPEED * dt end
+    if h2d_input2d::is_key_down(h2d_keys::key_up()) is state.right_y -= PADDLE_SPEED * dt end
+    if h2d_input2d::is_key_down(h2d_keys::key_down()) is state.right_y += PADDLE_SPEED * dt end
+
+    state.left_y = clamp_f64(state.left_y, 0.0, (SCREEN_H + 0.0) - PADDLE_H)
+    state.right_y = clamp_f64(state.right_y, 0.0, (SCREEN_H + 0.0) - PADDLE_H)
+    return state
+end
+
+fn step_ball(mut state: GameState, dt: f64, bounce: h2d_audio2::Sound, audio_ok: bool) -> GameState is
+    state.ball_x += state.ball_vx * dt
+    state.ball_y += state.ball_vy * dt
+
+    if state.ball_y <= 0.0 || state.ball_y + BALL_SIZE >= (SCREEN_H + 0.0) is
+        state.ball_vy = 0.0 - state.ball_vy
+        state = maybe_bounce(state, bounce, audio_ok)
+    end
+
+    ;; left paddle
+    if h2d_collision2d::rects_intersect(state.ball_x, state.ball_y, BALL_SIZE, BALL_SIZE, 30.0, state.left_y, PADDLE_W, PADDLE_H) && state.ball_vx < 0.0 is
+        state.ball_vx = 0.0 - state.ball_vx
+        state.ball_vy += paddle_english(state.ball_y, state.left_y)
+        state = maybe_bounce(state, bounce, audio_ok)
+    end
+
+    ;; right paddle
+    let right_x: f64 = (SCREEN_W + 0.0) - 30.0 - PADDLE_W
+    if h2d_collision2d::rects_intersect(state.ball_x, state.ball_y, BALL_SIZE, BALL_SIZE, right_x, state.right_y, PADDLE_W, PADDLE_H) && state.ball_vx > 0.0 is
+        state.ball_vx = 0.0 - state.ball_vx
+        state.ball_vy += paddle_english(state.ball_y, state.right_y)
+        state = maybe_bounce(state, bounce, audio_ok)
+    end
+
+    if state.ball_x < 0.0 is
+        state.right_score += 1
+        state = reset_ball(state, 1.0)
+    end
+    if state.ball_x > (SCREEN_W + 0.0) is
+        state.left_score += 1
+        state = reset_ball(state, 0.0 - 1.0)
+    end
+
+    return state
+end
+
+fn maybe_bounce(state: GameState, bounce: h2d_audio2::Sound, audio_ok: bool) -> GameState is
+    if audio_ok && h2d_audio2::is_valid_sound(bounce) is
+        h2d_audio2::play_sound(bounce)
+    end
+    return state
+end
+
+;; Deflects the ball a bit based on where on the paddle it hit —
+;; center = straight back, edges = steeper angle. Cheap "juice" that
+;; makes returning shots feel intentional instead of purely random.
+fn paddle_english(ball_y: f64, paddle_y: f64) -> f64 is
+    let hit_pos: f64 = (ball_y - paddle_y) / PADDLE_H - 0.5 ;; -0.5..0.5
+    return hit_pos * 260.0
+end
+
+fn reset_ball(mut state: GameState, dir_x: f64) -> GameState is
+    state.ball_x = (SCREEN_W + 0.0) / 2.0
+    state.ball_y = (SCREEN_H + 0.0) / 2.0
+    state.ball_vx = BALL_SPEED_START * dir_x
+    state.ball_vy = 140.0
+    return state
+end
+
+fn clamp_f64(v: f64, lo: f64, hi: f64) -> f64 is
+    if v < lo is return lo end
+    if v > hi is return hi end
+    return v
+end
+
+fn draw(state: GameState) is
+    ;; center line
+    let mut y: f64 = 0.0
+    while y < (SCREEN_H + 0.0) is
+        h2d_gfx::draw_rectangle((SCREEN_W + 0.0) / 2.0 - 2.0, y, 4.0, 14.0, h2d_color::dark_gray())
+        y += 28.0
+    end
+
+    h2d_gfx::draw_rectangle(30.0, state.left_y, PADDLE_W, PADDLE_H, h2d_color::white())
+    let right_x: f64 = (SCREEN_W + 0.0) - 30.0 - PADDLE_W
+    h2d_gfx::draw_rectangle(right_x, state.right_y, PADDLE_W, PADDLE_H, h2d_color::white())
+    h2d_gfx::draw_rectangle(state.ball_x, state.ball_y, BALL_SIZE, BALL_SIZE, h2d_color::yellow())
+
+    h2d_gfx::draw_text(to_string(state.left_score), (SCREEN_W + 0.0) / 2.0 - 60.0, 24.0, 32, h2d_color::white())
+    h2d_gfx::draw_text(to_string(state.right_score), (SCREEN_W + 0.0) / 2.0 + 40.0, 24.0, 32, h2d_color::white())
+    h2d_gfx::draw_text("W/S | Up/Down | Esc", 20.0, (SCREEN_H + 0.0) - 24.0, 8, h2d_color::gray())
+end

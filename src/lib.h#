@@ -1,20 +1,42 @@
 mod h2d_vec2
+mod h2d_timer
+mod h2d_random
+
+;; ── graphics engine: real OS window, GPU rendering, PNG/JPG textures,
+;;    real-time input, real audio (native/h2d_native.c, via SDL2). This
+;;    is H2D's primary engine as of 0.2.0 — see README.md. ────────────
+mod h2d_color
+mod h2d_keys
+mod h2d_gfx
+mod h2d_texture
+mod h2d_input2d
+mod h2d_audio2
+mod h2d_camera2d
+mod h2d_entity2d
+mod h2d_anim2d
+mod h2d_collision2d
+mod h2d_app2d
+
+;; ── text engine: character-grid ANSI-truecolor terminal renderer,
+;;    turn-based input. Fully working, unrelated coordinate space and
+;;    module set from the graphics engine above — pick one per game,
+;;    don't mix them in the same window/loop. Kept for turn-based games
+;;    (roguelikes, sokobans, board/card games) that don't need pixels.
+;;    See README.md, "Silnik tekstowy (starszy, dalej wspierany)". ────
 mod h2d_ansi
 mod h2d_sprite
 mod h2d_canvas
 mod h2d_entity
 mod h2d_input
-mod h2d_timer
 mod h2d_collision
 mod h2d_tilemap
 mod h2d_app
 mod h2d_camera
 mod h2d_anim
 mod h2d_audio
-mod h2d_random
 mod h2d_pathfind
 mod h2d_menu
 
 pub fn version() -> string is
-    return "0.1.0"
+    return "0.2.0"
 end

@@ -1,50 +1,97 @@
-pub struct Camera is
-    pub x: int   ;; world-space column of the viewport's top-left cell
-    pub y: int   ;; world-space row of the viewport's top-left cell
-    pub viewport_w: int
-    pub viewport_h: int
+mod h2d_vec2
+
+;; Pixel-space scrolling/zooming camera for h2d_gfx's window — the
+;; graphics-engine counterpart to h2d_camera.h#'s grid-cell camera for
+;; the character-grid text engine (that one stays as-is; this is a
+;; separate struct, not a replacement, since the two operate in
+;; completely different coordinate spaces).
+;;
+;; This does the world->screen math in plain H# rather than pushing a
+;; transform into SDL's renderer, so it composes with everything else
+;; in h2d_gfx/h2d_texture as-is: convert your world-space draw
+;; positions through `to_screen` (or `apply`) before calling
+;; h2d_gfx::draw_* / h2d_texture::draw_texture*, same as you'd do in
+;; any immediate-mode 2D engine without a camera-stack primitive.
+
+pub struct Camera2D is
+    pub target: h2d_vec2::Vec2   ;; world-space point the camera is centered on
+    pub offset: h2d_vec2::Vec2   ;; screen-space point `target` maps to (usually screen center)
+    pub zoom:   f64              ;; 1.0 = no zoom, 2.0 = 2x magnified, 0.5 = zoomed out
 end
 
-pub fn new_camera(viewport_w: int, viewport_h: int) -> Camera is
-    return Camera { x: 0, y: 0, viewport_w: viewport_w, viewport_h: viewport_h }
+pub fn new_camera2d(offset: h2d_vec2::Vec2) -> Camera2D is
+    return Camera2D { target: h2d_vec2::vec2_zero(), offset: offset, zoom: 1.0 }
 end
 
-;; Centers the camera on (target_x, target_y), clamped so the viewport
-;; never scrolls past the map edges. If the map is smaller than the
-;; viewport on some axis, that axis clamps to 0 (map stays pinned to
-;; the top-left rather than jittering).
-pub fn follow(mut cam: Camera, target_x: int, target_y: int, map_w: int, map_h: int) -> Camera is
-    let mut nx: int = target_x - cam.viewport_w / 2
-    let mut ny: int = target_y - cam.viewport_h / 2
+;; The common case: a camera whose offset is the window's center, so
+;; `target` is simply "the world point currently in the middle of the
+;; screen".
+pub fn new_camera2d_centered(screen_w: int, screen_h: int) -> Camera2D is
+    let off: h2d_vec2::Vec2 = h2d_vec2::vec2((screen_w + 0.0) / 2.0, (screen_h + 0.0) / 2.0)
+    return new_camera2d(off)
+end
 
-    let mut max_x: int = map_w - cam.viewport_w
-    let mut max_y: int = map_h - cam.viewport_h
-    if max_x < 0 is max_x = 0 end
-    if max_y < 0 is max_y = 0 end
-
-    if nx < 0 is nx = 0 end
-    if ny < 0 is ny = 0 end
-    if nx > max_x is nx = max_x end
-    if ny > max_y is ny = max_y end
-
-    cam.x = nx
-    cam.y = ny
+pub fn set_target(mut cam: Camera2D, target: h2d_vec2::Vec2) -> Camera2D is
+    cam.target = target
     return cam
 end
 
-pub fn world_to_screen_x(cam: Camera, world_x: int) -> int is
-    return world_x - cam.x
+pub fn set_zoom(mut cam: Camera2D, zoom: f64) -> Camera2D is
+    cam.zoom = zoom
+    return cam
 end
 
-pub fn world_to_screen_y(cam: Camera, world_y: int) -> int is
-    return world_y - cam.y
+;; World-space -> screen-space pixel position for drawing.
+pub fn to_screen(cam: Camera2D, world: h2d_vec2::Vec2) -> h2d_vec2::Vec2 is
+    let dx: f64 = (world.x - cam.target.x) * cam.zoom
+    let dy: f64 = (world.y - cam.target.y) * cam.zoom
+    return h2d_vec2::vec2(cam.offset.x + dx, cam.offset.y + dy)
 end
 
-;; True if the given world cell currently falls inside the viewport —
-;; use this to skip drawing (and to skip AI/physics work, if you want)
-;; for anything off-screen.
-pub fn is_visible(cam: Camera, world_x: int, world_y: int) -> bool is
-    let sx: int = world_to_screen_x(cam, world_x)
-    let sy: int = world_to_screen_y(cam, world_y)
-    return sx >= 0 && sy >= 0 && sx < cam.viewport_w && sy < cam.viewport_h
+;; Screen-space pixel position (e.g. from h2d_input2d::mouse_position())
+;; -> world-space — the inverse of to_screen, for "what world tile did
+;; the player click on".
+pub fn to_world(cam: Camera2D, screen: h2d_vec2::Vec2) -> h2d_vec2::Vec2 is
+    let dx: f64 = (screen.x - cam.offset.x) / cam.zoom
+    let dy: f64 = (screen.y - cam.offset.y) / cam.zoom
+    return h2d_vec2::vec2(cam.target.x + dx, cam.target.y + dy)
+end
+
+;; A length in world units, converted to on-screen pixels at the
+;; camera's current zoom — use when a draw call's *size* (a sprite's
+;; width, a radius) also needs to scale with zoom, not just its
+;; position.
+pub fn scale_length(cam: Camera2D, world_length: f64) -> f64 is
+    return world_length * cam.zoom
+end
+
+;; Re-centers the camera on `target`, clamped so the visible world-space
+;; rectangle never scrolls past [0, world_w] x [0, world_h]. If the
+;; world is smaller than the viewport on some axis (at the current
+;; zoom), that axis centers on the world's own middle instead of
+;; jittering at an edge. `viewport_w`/`viewport_h` are the screen-space
+;; size the camera is filling (usually h2d_gfx::screen_width()/height()).
+pub fn follow_clamped(mut cam: Camera2D, target: h2d_vec2::Vec2, world_w: f64, world_h: f64, viewport_w: f64, viewport_h: f64) -> Camera2D is
+    let half_view_w: f64 = (viewport_w / cam.zoom) / 2.0
+    let half_view_h: f64 = (viewport_h / cam.zoom) / 2.0
+
+    let mut tx: f64 = target.x
+    let mut ty: f64 = target.y
+
+    if world_w <= viewport_w / cam.zoom is
+        tx = world_w / 2.0
+    else is
+        if tx < half_view_w is tx = half_view_w end
+        if tx > world_w - half_view_w is tx = world_w - half_view_w end
+    end
+
+    if world_h <= viewport_h / cam.zoom is
+        ty = world_h / 2.0
+    else is
+        if ty < half_view_h is ty = half_view_h end
+        if ty > world_h - half_view_h is ty = world_h - half_view_h end
+    end
+
+    cam.target = h2d_vec2::vec2(tx, ty)
+    return cam
 end

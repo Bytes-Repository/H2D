@@ -1,0 +1,158 @@
+mod h2d_color
+
+;; H2D's real graphics backend: an actual OS window with GPU-accelerated
+;; 2D rendering, PNG/JPG textures, and a frame loop — as opposed to
+;; h2d_canvas's character-grid ANSI terminal renderer (still present,
+;; still fully working, see h2d_canvas.h# — pick whichever backend fits
+;; your game; they don't share state and can't be mixed in one window).
+;;
+;; This module is a thin wrapper: every `pub fn` here is (at most) a
+;; couple of lines translating H2D's naming/argument conventions onto
+;; one call into native/h2d_native.c through the `extern` block below.
+;; See native/h2d_native.c's top-of-file comment for the C side, and
+;; native/README.md for how to build + link it.
+;;
+;; API shape is deliberately close to macroquad's (init_window,
+;; clear_background, draw_rectangle, draw_texture, next_frame,
+;; screen_width/height, is_key_down, get_frame_time, ...) since that's
+;; a well-worn, easy-to-teach shape for an immediate-mode 2D engine —
+;; not a source dependency, just a familiar naming convention.
+
+extern dynamic [c, "h2d_native"] is
+    fn h2d_init_window(width: int, height: int, title: string) -> int
+    fn h2d_window_should_close() -> int
+    fn h2d_close_window()
+    fn h2d_set_target_fps(fps: int)
+    fn h2d_begin_frame()
+    fn h2d_end_frame()
+    fn h2d_get_frame_time() -> f64
+    fn h2d_get_time() -> f64
+    fn h2d_screen_width() -> int
+    fn h2d_screen_height() -> int
+    fn h2d_set_window_title(title: string)
+
+    fn h2d_clear_background(r: int, g: int, b: int, a: int)
+    fn h2d_draw_rectangle(x: f64, y: f64, w: f64, h: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_rectangle_lines(x: f64, y: f64, w: f64, h: f64, thick: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_circle(cx: f64, cy: f64, radius: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_circle_lines(cx: f64, cy: f64, radius: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_line(x1: f64, y1: f64, x2: f64, y2: f64, thick: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_triangle(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_text(text: string, x: f64, y: f64, size: int, r: int, g: int, b: int, a: int)
+    fn h2d_measure_text(text: string, size: int) -> int
+end
+
+;; ── window / frame lifecycle ────────────────────────────────────────
+
+;; Opens the game window. Call once, before anything else in this
+;; module (or h2d_texture / h2d_audio2 / h2d_input2d).
+pub fn init_window(width: int, height: int, title: string) -> bool is
+    return h2d_init_window(width, height, title) != 0
+end
+
+;; True once the player has clicked the window's close button (or the
+;; OS otherwise asked the app to quit) — the standard `while
+;; !window_should_close() is ... end` main-loop condition.
+pub fn window_should_close() -> bool is
+    return h2d_window_should_close() != 0
+end
+
+;; Frees the window, renderer, and every loaded texture/sound/music.
+;; Call once after your main loop exits.
+pub fn close_window() is
+    h2d_close_window()
+end
+
+;; Caps the main loop at `fps` frames/second (next_frame() sleeps off
+;; any leftover budget); 0 or negative disables the cap.
+pub fn set_target_fps(fps: int) is
+    h2d_set_target_fps(fps)
+end
+
+;; Seconds elapsed for the frame that just ended — feed this straight
+;; into your movement/animation math (`x += speed * get_frame_time()`)
+;; so gameplay speed doesn't depend on framerate.
+pub fn get_frame_time() -> f64 is
+    return h2d_get_frame_time()
+end
+
+;; Seconds since init_window() was called — handy for time-based
+;; effects (pulsing, sine-wave motion) that don't want to accumulate
+;; their own clock.
+pub fn get_time() -> f64 is
+    return h2d_get_time()
+end
+
+pub fn screen_width() -> int is
+    return h2d_screen_width()
+end
+
+pub fn screen_height() -> int is
+    return h2d_screen_height()
+end
+
+pub fn set_window_title(title: string) is
+    h2d_set_window_title(title)
+end
+
+;; Ends the current frame (presents it to the screen, applies the FPS
+;; cap) and immediately begins the next one (polls OS/input events).
+;; Call this exactly once per iteration of your main loop, after all
+;; of that frame's drawing:
+;;
+;;   while !h2d_gfx::window_should_close() is
+;;       h2d_gfx::clear_background(h2d_color::black())
+;;       ;; ... draw calls ...
+;;       h2d_gfx::next_frame()
+;;   end
+pub fn next_frame() is
+    h2d_end_frame()
+    h2d_begin_frame()
+end
+
+;; ── drawing ──────────────────────────────────────────────────────────
+
+pub fn clear_background(c: h2d_color::Color) is
+    h2d_clear_background(c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_rectangle(x: f64, y: f64, w: f64, h: f64, c: h2d_color::Color) is
+    h2d_draw_rectangle(x, y, w, h, c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_rectangle_lines(x: f64, y: f64, w: f64, h: f64, thick: f64, c: h2d_color::Color) is
+    h2d_draw_rectangle_lines(x, y, w, h, thick, c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_circle(cx: f64, cy: f64, radius: f64, c: h2d_color::Color) is
+    h2d_draw_circle(cx, cy, radius, c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_circle_lines(cx: f64, cy: f64, radius: f64, c: h2d_color::Color) is
+    h2d_draw_circle_lines(cx, cy, radius, c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_line(x1: f64, y1: f64, x2: f64, y2: f64, thick: f64, c: h2d_color::Color) is
+    h2d_draw_line(x1, y1, x2, y2, thick, c.r, c.g, c.b, c.a)
+end
+
+pub fn draw_triangle(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64, c: h2d_color::Color) is
+    h2d_draw_triangle(x1, y1, x2, y2, x3, y3, c.r, c.g, c.b, c.a)
+end
+
+;; `size` is the glyph height in pixels (8 = the built-in bitmap
+;; font's native size; 16/24/32 scale it up — see native/h2d_native.c's
+;; h2d_draw_text for how). There's no font-loading step: this is a
+;; fixed bitmap font baked into SDL2_gfx, always available, good enough
+;; for HUD text/scores/menus. For real typography, load your own font
+;; texture as a spritesheet and draw it through h2d_texture's
+;; draw_texture_rec instead.
+pub fn draw_text(text: string, x: f64, y: f64, size: int, c: h2d_color::Color) is
+    h2d_draw_text(text, x, y, size, c.r, c.g, c.b, c.a)
+end
+
+;; Approximate on-screen width in pixels of `text` at `size` — use to
+;; center or right-align (`draw_text(s, (screen_width() - measure_text(s, 16)) / 2, y, 16, c)`).
+pub fn measure_text(text: string, size: int) -> int is
+    return h2d_measure_text(text, size)
+end

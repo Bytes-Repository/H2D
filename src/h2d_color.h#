@@ -1,0 +1,49 @@
+pub struct Color is
+    pub r: int
+    pub g: int
+    pub b: int
+    pub a: int
+end
+
+pub fn color(r: int, g: int, b: int, a: int) -> Color is
+    return Color { r: clamp255(r), g: clamp255(g), b: clamp255(b), a: clamp255(a) }
+end
+
+pub fn color_rgb(r: int, g: int, b: int) -> Color is
+    return color(r, g, b, 255)
+end
+
+fn clamp255(v: int) -> int is
+    if v < 0 is return 0 end
+    if v > 255 is return 255 end
+    return v
+end
+
+;; Returns a copy of `c` with alpha replaced by `a` (0-255) — handy for
+;; fade in/out without re-specifying the rgb every time.
+pub fn with_alpha(c: Color, a: int) -> Color is
+    return Color { r: c.r, g: c.g, b: c.b, a: clamp255(a) }
+end
+
+;; ── palette ──────────────────────────────────────────────────────────
+
+pub fn white()      -> Color is return color_rgb(255, 255, 255) end
+pub fn black()       -> Color is return color_rgb(0, 0, 0) end
+pub fn blank()       -> Color is return color(0, 0, 0, 0) end
+pub fn gray()        -> Color is return color_rgb(130, 130, 130) end
+pub fn light_gray()  -> Color is return color_rgb(200, 200, 200) end
+pub fn dark_gray()   -> Color is return color_rgb(60, 60, 60) end
+pub fn red()         -> Color is return color_rgb(230, 50, 50) end
+pub fn green()       -> Color is return color_rgb(60, 200, 90) end
+pub fn blue()        -> Color is return color_rgb(60, 120, 230) end
+pub fn yellow()      -> Color is return color_rgb(240, 210, 50) end
+pub fn orange()      -> Color is return color_rgb(240, 140, 30) end
+pub fn purple()      -> Color is return color_rgb(160, 70, 210) end
+pub fn magenta()     -> Color is return color_rgb(220, 60, 200) end
+pub fn cyan()        -> Color is return color_rgb(50, 210, 210) end
+pub fn pink()        -> Color is return color_rgb(240, 130, 180) end
+pub fn brown()       -> Color is return color_rgb(140, 95, 55) end
+pub fn gold()        -> Color is return color_rgb(255, 200, 40) end
+pub fn sky_blue()    -> Color is return color_rgb(110, 180, 240) end
+pub fn dark_green()  -> Color is return color_rgb(20, 110, 50) end
+pub fn dark_blue()   -> Color is return color_rgb(20, 40, 120) end

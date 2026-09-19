@@ -1,0 +1,143 @@
+mod h2d_vec2
+mod h2d_color
+mod h2d_texture
+
+;; Pixel-space entity/world for h2d_gfx's graphics engine — the
+;; counterpart to h2d_entity.h#'s grid-cell Entity/World for the text
+;; engine (kept as-is, unmodified; this is a separate struct set, not a
+;; replacement, since positions here are `f64` pixels/world-units, not
+;; `int` grid cells).
+;;
+;; Same overall pattern as h2d_entity: functions take a World and
+;; return the updated World (`world = h2d_entity2d::move_index(world, ...)`)
+;; rather than mutating in the background.
+
+pub struct Entity2D is
+    pub id:       int
+    pub pos:      h2d_vec2::Vec2
+    pub vel:      h2d_vec2::Vec2
+    pub rotation: f64             ;; degrees
+    pub width:    f64             ;; draw size — independent of the texture's native pixel size
+    pub height:   f64
+    pub texture:  h2d_texture::Texture2D
+    pub tint:     h2d_color::Color
+    pub tag:      string          ;; free-form: "player", "enemy", "bullet", ...
+    pub alive:    bool
+end
+
+pub struct World2D is
+    pub entities: [Entity2D]
+    pub next_id:  int
+end
+
+pub fn new_world2d() -> World2D is
+    return World2D { entities: [], next_id: 1 }
+end
+
+;; Returns (updated World2D, new entity's id).
+pub fn spawn(mut world: World2D, pos: h2d_vec2::Vec2, tex: h2d_texture::Texture2D, tag: string) -> (World2D, int) is
+    let e: Entity2D = Entity2D {
+        id: world.next_id,
+        pos: pos,
+        vel: h2d_vec2::vec2_zero(),
+        rotation: 0.0,
+        width: tex.width + 0.0,
+        height: tex.height + 0.0,
+        texture: tex,
+        tint: h2d_color::white(),
+        tag: tag,
+        alive: true,
+    }
+    world.entities.push(e)
+    let assigned_id: int = world.next_id
+    world.next_id += 1
+    return (world, assigned_id)
+end
+
+pub fn despawn(mut world: World2D, id: int) -> World2D is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].id == id is
+            world.entities[i].alive = false
+        end
+        i += 1
+    end
+    return world
+end
+
+;; -1 if nothing alive matches.
+pub fn find_index_by_id(world: World2D, id: int) -> int is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].id == id && world.entities[i].alive is return i end
+        i += 1
+    end
+    return -1
+end
+
+pub fn all_with_tag(world: World2D, tag: string) -> [Entity2D] is
+    let mut out: [Entity2D] = []
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].alive && world.entities[i].tag == tag is out.push(world.entities[i]) end
+        i += 1
+    end
+    return out
+end
+
+pub fn count_with_tag(world: World2D, tag: string) -> int is
+    return all_with_tag(world, tag).len()
+end
+
+;; Applies `entities[index].vel` to its position, scaled by `dt`
+;; (seconds — pass h2d_gfx::get_frame_time()). Call once per frame per
+;; moving entity, or roll your own integration if you need more than
+;; plain linear motion (gravity, friction, ...).
+pub fn integrate_index(mut world: World2D, index: int, dt: f64) -> World2D is
+    world.entities[index].pos.x += world.entities[index].vel.x * dt
+    world.entities[index].pos.y += world.entities[index].vel.y * dt
+    return world
+end
+
+;; Applies integrate_index to every alive entity — the common case when
+;; nothing needs special-cased per-entity physics.
+pub fn integrate_all(mut world: World2D, dt: f64) -> World2D is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        if world.entities[i].alive is
+            world = integrate_index(world, i, dt)
+        end
+        i += 1
+    end
+    return world
+end
+
+pub fn set_pos_index(mut world: World2D, index: int, pos: h2d_vec2::Vec2) -> World2D is
+    world.entities[index].pos = pos
+    return world
+end
+
+pub fn set_vel_index(mut world: World2D, index: int, vel: h2d_vec2::Vec2) -> World2D is
+    world.entities[index].vel = vel
+    return world
+end
+
+;; Draws every alive entity with its texture, respecting rotation
+;; (around its own center), draw size, and tint — a one-call renderer
+;; for the common case. Skip this and draw manually (via h2d_texture)
+;; if you need per-entity draw order other than array order, or
+;; per-entity special effects.
+pub fn draw_all(world: World2D) is
+    let mut i: int = 0
+    while i < world.entities.len() is
+        let e: Entity2D = world.entities[i]
+        if e.alive && h2d_texture::is_valid(e.texture) is
+            h2d_texture::draw_texture_ex(
+                e.texture, e.pos.x, e.pos.y, e.width, e.height,
+                e.rotation, e.width / 2.0, e.height / 2.0,
+                false, false, e.tint
+            )
+        end
+        i += 1
+    end
+end

@@ -1,0 +1,78 @@
+mod h2d_keys
+
+;; Real-time input for h2d_gfx's window — polled every frame, not
+;; blocking like h2d_input's `read_action` (which reads a whole line
+;; from stdin and is built for the turn-based text engine). Key/button
+;; codes come from h2d_keys.h# (e.g. `h2d_keys::key_w()`,
+;; `h2d_keys::mouse_left()`).
+;;
+;; Call h2d_gfx::next_frame() (which internally re-polls OS events)
+;; once per frame before reading these — state here reflects "as of the
+;; most recent next_frame()/init_window() call", not truly live.
+
+extern dynamic [c, "h2d_native"] is
+    fn h2d_is_key_down(key: int) -> int
+    fn h2d_is_key_pressed(key: int) -> int
+    fn h2d_is_key_released(key: int) -> int
+    fn h2d_mouse_x() -> f64
+    fn h2d_mouse_y() -> f64
+    fn h2d_mouse_wheel() -> f64
+    fn h2d_is_mouse_button_down(button: int) -> int
+    fn h2d_is_mouse_button_pressed(button: int) -> int
+end
+
+;; True every frame the key is held.
+pub fn is_key_down(key: int) -> bool is
+    return h2d_is_key_down(key) != 0
+end
+
+;; True only on the single frame the key transitioned from up to down —
+;; use this for "jump", "fire", menu confirm; use is_key_down for
+;; continuous movement.
+pub fn is_key_pressed(key: int) -> bool is
+    return h2d_is_key_pressed(key) != 0
+end
+
+;; True only on the single frame the key transitioned from down to up.
+pub fn is_key_released(key: int) -> bool is
+    return h2d_is_key_released(key) != 0
+end
+
+;; Mouse position in window pixel coordinates, (0, 0) at the top-left.
+pub fn mouse_position() -> (f64, f64) is
+    return (h2d_mouse_x(), h2d_mouse_y())
+end
+
+pub fn mouse_x() -> f64 is return h2d_mouse_x() end
+pub fn mouse_y() -> f64 is return h2d_mouse_y() end
+
+;; Positive = scrolled up/away from the user, negative = scrolled
+;; down/toward — resets to 0 every frame (it's a per-frame delta, not
+;; an accumulated total).
+pub fn mouse_wheel() -> f64 is
+    return h2d_mouse_wheel()
+end
+
+pub fn is_mouse_button_down(button: int) -> bool is
+    return h2d_is_mouse_button_down(button) != 0
+end
+
+pub fn is_mouse_button_pressed(button: int) -> bool is
+    return h2d_is_mouse_button_pressed(button) != 0
+end
+
+;; Convenience: (dx, dy) unit-ish delta from WASD + arrow keys combined
+;; (whichever are held), each axis independently -1/0/1 — NOT
+;; normalized to length 1 on the diagonals (multiply by
+;; get_frame_time() * speed and, if you care about equal diagonal
+;; speed, normalize the resulting h2d_vec2::Vec2 yourself with
+;; `.normalized()`).
+pub fn wasd_axis() -> (f64, f64) is
+    let mut dx: f64 = 0.0
+    let mut dy: f64 = 0.0
+    if is_key_down(h2d_keys::key_left()) || is_key_down(h2d_keys::key_a()) is dx -= 1.0 end
+    if is_key_down(h2d_keys::key_right()) || is_key_down(h2d_keys::key_d()) is dx += 1.0 end
+    if is_key_down(h2d_keys::key_up()) || is_key_down(h2d_keys::key_w()) is dy -= 1.0 end
+    if is_key_down(h2d_keys::key_down()) || is_key_down(h2d_keys::key_s()) is dy += 1.0 end
+    return (dx, dy)
+end

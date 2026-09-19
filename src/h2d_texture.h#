@@ -1,0 +1,97 @@
+mod h2d_color
+
+;; GPU textures for h2d_gfx's window. Requires h2d_gfx::init_window() to
+;; have been called first (there's no renderer, and therefore nowhere
+;; to upload a texture to, before that).
+;;
+;; Unlike `std -> image` (H#'s built-in image loader, which only
+;; decodes uncompressed 24-bit BMP — see std/image.h#'s own doc
+;; comment), load_texture here goes through SDL_image and accepts PNG,
+;; JPEG, BMP, GIF, and more — use real art assets, not just BMP.
+
+extern dynamic [c, "h2d_native"] is
+    fn h2d_load_texture(path: string) -> int
+    fn h2d_load_texture_from_rgba(pixels: bytes, width: int, height: int) -> int
+    fn h2d_unload_texture(handle: int)
+    fn h2d_texture_width(handle: int) -> int
+    fn h2d_texture_height(handle: int) -> int
+    fn h2d_draw_texture(handle: int, x: f64, y: f64, r: int, g: int, b: int, a: int)
+    fn h2d_draw_texture_ex(handle: int, x: f64, y: f64, dst_w: f64, dst_h: f64, rotation_deg: f64, origin_x: f64, origin_y: f64, flip_h: int, flip_v: int, r: int, g: int, b: int, a: int)
+    fn h2d_draw_texture_rec(handle: int, src_x: f64, src_y: f64, src_w: f64, src_h: f64, x: f64, y: f64, dst_w: f64, dst_h: f64, r: int, g: int, b: int, a: int)
+end
+
+;; A loaded, GPU-resident texture. `handle` is an opaque id into the
+;; native shim's texture table — 0 means load_texture failed (bad path,
+;; unsupported format, no window open yet). Always check
+;; `texture.handle != 0` (or `is_valid`) after loading before drawing
+;; with it; drawing an invalid handle is a silent no-op, never a crash,
+;; but it also never appears on screen, which is easy to mistake for a
+;; positioning bug if you don't check.
+pub struct Texture2D is
+    pub handle: int
+    pub width:  int
+    pub height: int
+end
+
+pub fn load_texture(path: string) -> Texture2D is
+    let h: int = h2d_load_texture(path)
+    if h == 0 is
+        return Texture2D { handle: 0, width: 0, height: 0 }
+    end
+    return Texture2D { handle: h, width: h2d_texture_width(h), height: h2d_texture_height(h) }
+end
+
+;; Builds a texture from a raw top-down RGBA8888 buffer (4 bytes/pixel,
+;; row-major, no padding) instead of a file — e.g. for procedurally
+;; generated pixel art, or a noise/heightmap visualization.
+pub fn load_texture_from_rgba(pixels: bytes, width: int, height: int) -> Texture2D is
+    let h: int = h2d_load_texture_from_rgba(pixels, width, height)
+    if h == 0 is
+        return Texture2D { handle: 0, width: 0, height: 0 }
+    end
+    return Texture2D { handle: h, width: width, height: height }
+end
+
+pub fn is_valid(tex: Texture2D) -> bool is
+    return tex.handle != 0
+end
+
+pub fn unload_texture(tex: Texture2D) is
+    if tex.handle != 0 is
+        h2d_unload_texture(tex.handle)
+    end
+end
+
+;; Plain 1:1 blit at (x, y), top-left corner, tinted by `tint` (pass
+;; h2d_color::white() for "no tint, draw as-is").
+pub fn draw_texture(tex: Texture2D, x: f64, y: f64, tint: h2d_color::Color) is
+    h2d_draw_texture(tex.handle, x, y, tint.r, tint.g, tint.b, tint.a)
+end
+
+;; Full transform draw: destination width/height (independent of the
+;; texture's native size — this is your scale control), rotation in
+;; degrees clockwise around (origin_x, origin_y) measured from (x, y)
+;; — pass (dst_w / 2.0, dst_h / 2.0) to rotate around the sprite's own
+;; center, which is what you want for most game entities — optional
+;; horizontal/vertical mirroring, and a tint. Rotation/flip cost
+;; nothing extra: this is a single GPU blit either way.
+pub fn draw_texture_ex(
+    tex: Texture2D, x: f64, y: f64, dst_w: f64, dst_h: f64,
+    rotation_deg: f64, origin_x: f64, origin_y: f64,
+    flip_h: bool, flip_v: bool, tint: h2d_color::Color
+) is
+    let fh: int = if flip_h then 1 else 0
+    let fv: int = if flip_v then 1 else 0
+    h2d_draw_texture_ex(tex.handle, x, y, dst_w, dst_h, rotation_deg, origin_x, origin_y, fh, fv, tint.r, tint.g, tint.b, tint.a)
+end
+
+;; Draws the sub-rectangle (src_x, src_y, src_w, src_h) of `tex`,
+;; stretched to (dst_w, dst_h) at (x, y) — the primitive a sprite-sheet
+;; / texture-atlas animation is built from (see h2d_anim2d.h#, which
+;; wraps exactly this).
+pub fn draw_texture_rec(
+    tex: Texture2D, src_x: f64, src_y: f64, src_w: f64, src_h: f64,
+    x: f64, y: f64, dst_w: f64, dst_h: f64, tint: h2d_color::Color
+) is
+    h2d_draw_texture_rec(tex.handle, src_x, src_y, src_w, src_h, x, y, dst_w, dst_h, tint.r, tint.g, tint.b, tint.a)
+end
